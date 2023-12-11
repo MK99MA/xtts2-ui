@@ -32,7 +32,9 @@ default_speaker_name = "Rogger"
 if is_mac_os():
     device = torch.device('cpu')
 else:
-    device = torch.device('cuda:0')
+    #device = torch.device('cuda:0')
+    #Too lazy to add a coded check...
+    device = torch.device('cpu')
 
 # Load model
 tts = TTS(model_name=params["model_name"]).to(device)
@@ -46,7 +48,8 @@ tts = TTS(model_name=params["model_name"]).to(device)
 def gen_voice(string, spk, speed, english):
     string = html.unescape(string)
     short_uuid = str(uuid.uuid4())[:8]
-    fl_name='outputs/' + spk + "-" + short_uuid +'.wav'
+    string_ul = string.replace(" ","_")
+    fl_name='outputs/' + string_ul + '.wav'#spk + "-" + short_uuid +'.wav'
     output_file = Path(fl_name)
     this_dir = str(Path(__file__).parent.resolve())
     tts.tts_to_file(
@@ -65,9 +68,16 @@ def update_speakers():
 def update_dropdown(_=None, selected_speaker=default_speaker_name):
     return gr.Dropdown(choices=update_speakers(), value=selected_speaker, label="Select Speaker")
 
-def handle_recorded_audio(audio_data, speaker_dropdown, filename = "user_entered"):
+def handle_recorded_audio(audio_data, speaker_dropdown, filename): #= "user_entered"):
     if not audio_data:
         return speaker_dropdown
+
+    #Use entered name or set default if empty
+    if filename_input = "":
+        filename = 'user_entered'
+    else:
+        filename = filename_input
+        
     
     sample_rate, audio_content = audio_data
     
