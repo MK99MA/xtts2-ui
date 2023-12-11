@@ -68,12 +68,17 @@ def update_speakers():
 def update_dropdown(_=None, selected_speaker=default_speaker_name):
     return gr.Dropdown(choices=update_speakers(), value=selected_speaker, label="Select Speaker")
 
-def handle_recorded_audio(audio_data, speaker_dropdown, filename): #= "user_entered"):
+# add delete Speaker button
+# add save as with cusotm filename field
+# add download button
+
+def handle_recorded_audio(audio_data, speaker_dropdown, filename = "user_entered"):
     if not audio_data:
         return speaker_dropdown
 
     #Use entered name or set default if empty
-    if filename_input = "":
+    #to do
+    if filename_input == "":
         filename = 'user_entered'
     else:
         filename = filename_input
