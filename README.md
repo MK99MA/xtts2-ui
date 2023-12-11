@@ -32,7 +32,7 @@ To set up this project, follow these steps in a terminal:
 
     - Clone the repository to your local machine.
       ```bash
-      git clone https://github.com/pbanuru/xtts2-ui.git
+      git clone https://github.com/MK99MA/xtts2-ui.git
       cd xtts2-ui
       ```
 
