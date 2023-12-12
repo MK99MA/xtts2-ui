@@ -34,7 +34,7 @@ if is_mac_os():
     device = torch.device('cpu')
 else:
     #device = torch.device('cuda:0')
-    #Too lazy to add a coded check...
+    #AMD GPU and too lazy to add a coded check...
     device = torch.device('cpu')
 
 # Load model
@@ -62,16 +62,15 @@ def gen_voice(string, spk, speed, english):
     )
     return output_file
 
+def set_default_speaker():
+    default_speaker_name = selected_speaker
+
 def update_speakers():
     speakers = {p.stem: str(p) for p in list(Path('targets').glob("*.wav"))}
     return list(speakers.keys())
 
 def update_dropdown(_=None, selected_speaker=default_speaker_name):
     return gr.Dropdown(choices=update_speakers(), value=selected_speaker, label="Select Speaker")
-
-# add delete Speaker button
-# add save as with cusotm filename field
-# add download button
 
 def handle_recorded_audio(audio_data, speaker_dropdown, filename = "user_entered"):
     if not audio_data:
@@ -116,26 +115,31 @@ with gr.Blocks() as app:
             
             with gr.Row():
                 with gr.Column():
+                    #Update Dropdown with new values
                     speaker_dropdown = update_dropdown()
                     refresh_button = gr.Button("Refresh Speakers")
                 with gr.Column():
+                    #Save a new speaker
                     filename_input = gr.Textbox(label="Add new Speaker", placeholder="Enter a name for your recording/upload to save as")
                     save_button = gr.Button("Save Below Recording")
             with gr.Row():
+                #
                 with gr.Column():
+                    #Delete selected Speaker
                     delete_speaker_button = gr.Button("Delete selected speaker")
                     delete_speaker_button.click(
                         fn= #function,
                         inputs= #vars,
                         outputs= #gradio_component to use)
-                    #Delete selected Speaker
+                #
                 with gr.Column():
+                    #Set as default Speaker
                     default_speaker_button = gr.Button("Set as default speaker")
                     default_speaker_button.click(
-                        fn=,
-                        inputs=,
-                        outputs=)
-                    #Set as default Speaker
+                        fn=set_default_speaker,
+                        inputs=[speaker_dropdown],
+                        outputs=speaker_dropdown)
+                    
                 
             refresh_button.click(fn=update_dropdown, inputs=[], outputs=speaker_dropdown)
 
@@ -157,7 +161,7 @@ with gr.Blocks() as app:
                     filename_struct = gr.Textbox(label="Filename structure", value = fl_name)
                 with gr.Column():
                     download_input = gr.Textbox(label="Overwrite filename", placeholder="Enter a custom name for the generated audio")
-
+            #
             with gr.Row():
                 # Download Button
                 download_button = gr.Button("Download", link = output_file)
@@ -169,4 +173,8 @@ with gr.Blocks() as app:
     )
 
 if __name__ == "__main__":
-    app.launch()
+    public = input("Launch with public URL? (Y/N)")
+    if public.lower() == 'y' or public.lower() == 'yes':
+        app.launch(share=True)
+    else:
+        app.launch()
