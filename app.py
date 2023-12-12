@@ -123,8 +123,18 @@ with gr.Blocks() as app:
                     save_button = gr.Button("Save Below Recording")
             with gr.Row():
                 with gr.Column():
+                    delete_speaker_button = gr.Button("Delete selected speaker")
+                    delete_speaker_button.click(
+                        fn= #function,
+                        inputs= #vars,
+                        outputs= #gradio_component to use)
                     #Delete selected Speaker
                 with gr.Column():
+                    default_speaker_button = gr.Button("Set as default speaker")
+                    default_speaker_button.click(
+                        fn=,
+                        inputs=,
+                        outputs=)
                     #Set as default Speaker
                 
             refresh_button.click(fn=update_dropdown, inputs=[], outputs=speaker_dropdown)
