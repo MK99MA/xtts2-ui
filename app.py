@@ -28,6 +28,7 @@ device = None
 
 # Set the default speaker name
 default_speaker_name = "Rogger"
+# change default speaker name and read from config?
 
 if is_mac_os():
     device = torch.device('cpu')
@@ -81,7 +82,7 @@ def handle_recorded_audio(audio_data, speaker_dropdown, filename = "user_entered
     if filename_input == "":
         filename = 'user_entered'
     else:
-        filename = filename_input
+        filename = filename_input.value
         
     
     sample_rate, audio_content = audio_data
@@ -120,6 +121,11 @@ with gr.Blocks() as app:
                 with gr.Column():
                     filename_input = gr.Textbox(label="Add new Speaker", placeholder="Enter a name for your recording/upload to save as")
                     save_button = gr.Button("Save Below Recording")
+            with gr.Row():
+                with gr.Column():
+                    #Delete selected Speaker
+                with gr.Column():
+                    #Set as default Speaker
                 
             refresh_button.click(fn=update_dropdown, inputs=[], outputs=speaker_dropdown)
 
@@ -134,6 +140,17 @@ with gr.Blocks() as app:
 
         with gr.Column():
             audio_output = gr.Audio()
+
+            with gr.Row():
+                # Column for filename structure
+                with gr.Column():
+                    filename_struct = gr.Textbox(label="Filename structure", value = fl_name)
+                with gr.Column():
+                    download_input = gr.Textbox(label="Overwrite filename", placeholder="Enter a custom name for the generated audio")
+
+            with gr.Row():
+                # Download Button
+                download_button = gr.Button("Download", link = output_file)
 
     submit_button.click(
         fn=gen_voice,
