@@ -23,13 +23,6 @@ params = {
 	"model_name": "tts_models/multilingual/multi-dataset/xtts_v2",
 }
 
-default_vals = {
-	"default_speaker_name": "2B",
-	"def_struct": "string_ul",
-	"language": "English",
-	"speed": "0.8"
-}
-
 
 # SUPPORTED_FORMATS = ['wav', 'mp3', 'flac', 'ogg']
 SAMPLE_RATE = 16000
@@ -42,6 +35,7 @@ def_struct = 'string_ul'
 fl_name = ''#'outputs/' + def_struct + '.wav'
 output_file = Path(fl_name)
 
+# Decide on Hardware to use
 if is_mac_os():
 	device = torch.device('cpu')
 else:
@@ -50,7 +44,8 @@ else:
 	device = torch.device('cpu')
 
 # Load model
-tts = TTS(model_name=params["model_name"]).to(device)
+# Disabled for testing
+#tts = TTS(model_name=params["model_name"]).to(device)
 
 # # Random sentence (assuming harvard_sentences.txt is in the correct path)
 # def random_sentence():
@@ -74,7 +69,8 @@ def gen_voice(string, spk, speed, english):
 	)
 	return output_file
 
-#TODO
+# Display content of config.json
+# TODO
 def display_json(file_path):
     try:
         with open(file_path, 'r') as file:
@@ -83,51 +79,102 @@ def display_json(file_path):
     except Exception as e:
         return f"Error: {str(e)}"
 
-def update_config(key,value):
-	with open ('config.json', 'r') as jsonfile:
-		data = json.load(jsonfile)
-		jsonfile.close()
-		
+# Update config with new value
+def update_config(key, value):
+	try:
+		with open ('config.json', 'r') as jsonfile:
+			data = json.load(jsonfile)
+	except FileNotFoundError:
+		data = {}
+
 	data[key] = value
+
 	with open('config.json', 'w') as jsonfile:
-		myJSON = json.dump(data, jsonfile)
-		jsonfile.close()
+		json.dump(data, jsonfile, indent=2)
+		#jsonfile.close()
 
-def set_default_speaker(new_default):
-	#TODO
-	default_speaker_name = new_default
-	update_config('default_speaker_name',)
+# Get a list of .wav files in directory
+def get_wav_files(folder_path):
+	wav_files = [f for f in os.listdir(folder_path) if f.endswith(".wav")]
+	return wav_files
 
-def del_speaker(speaker_del):
-	#TODO
-	del_path = 'targets' + speaker_del + '.wav'
+# Save currently selected Speaker (dropbox) as default in config
+def set_default_speaker(speaker_dropdown):
+	#print(speaker_dropdown)
+	sel_speaker = speaker_dropdown
+	print(sel_speaker)
+	update_config('default_speaker_name', sel_speaker)
+	return gr.Dropdown(choices=update_speakers(), value=get_config_val('default_speaker_name'), label="Select Speaker")
+
+# Delete currently selected Speaker (Dropbox)
+def del_speaker(speaker_dropdown):
+	speaker_del = speaker_dropdown
+	del_path = 'targets/' + speaker_del + '.wav'
 	if os.path.exists(del_path):
 		os.remove(del_path)
+		#Refresh Box and set default value
+		return gr.Dropdown(choices=update_speakers(), value=get_config_val('default_speaker_name'), label="Select Speaker")
 	else:
-		print("The file does not exist.")
-	
+		print("The file does not exist: " + del_path)
+
+# Get files in directory /targets
 def update_speakers():
 	speakers = {p.stem: str(p) for p in list(Path('targets').glob("*.wav"))}
 	return list(speakers.keys())
 
+def get_config_val(key):
+	try:
+		with open ('config.json', 'r') as jsonfile:
+			data = json.load(jsonfile)
+	except FileNotFoundError:
+		data = {}
+
+	conf_value = data[key]
+	return conf_value
+
+# Create Dropdown
+# update_speakers () = list of voices
 def update_dropdown(_=None, selected_speaker=default_speaker_name):
 	return gr.Dropdown(choices=update_speakers(), value=selected_speaker, label="Select Speaker")
 
-def handle_recorded_audio(audio_data, speaker_dropdown, filename = "user_entered"):
+# Target filename Check
+def modify_filename(save_path):
+	if os.path.exists(save_path):
+		folder, filename = os.path.split(save_path)
+		name, ext = os.path.splitext(filename)
+
+		count = 1
+
+		while os.path.exists(f"{folder}/{name}_{count}{ext}"):
+			count += 1
+
+		save_path = f"{folder}/{name}_{count}{ext}"
+		filename = f"{name}_{count}"
+		#print(save_path)
+		#print(filename)
+	return save_path, filename
+
+# Handle audio
+def handle_recorded_audio(audio_data, speaker_dropdown, filename_input): # = "user_entered"):
 	if not audio_data:
 		return speaker_dropdown
 
 	#Use entered name or set default if empty
-	#to do
-	if filename_input == "":
-		filename = 'user_entered'
+	if filename_input == None:
+		filename = 'NewVoice'
+	elif filename_input == "":
+		filename = 'NewVoice'
 	else:
-		filename = filename_input.value
-		
-	
+		filename = filename_input
+
 	sample_rate, audio_content = audio_data
-	
+
+	# Set save path
 	save_path = f"targets/{filename}.wav"
+
+	# Check save path and modify it if needed
+	if os.path.exists(save_path):
+		save_path, filename = modify_filename(save_path)
 
 	# Write the audio content to a WAV file
 	sf.write(save_path, audio_content, sample_rate)
@@ -137,34 +184,48 @@ def handle_recorded_audio(audio_data, speaker_dropdown, filename = "user_entered
 	return updated_dropdown
 
 #Check if config exists
-if not os.path.isfile('/config.json'):
-	myJSON = json.dumps(default_vals)
-	
+if not os.path.isfile('config.json'):
+	# Default config values for creation
+	default_vals = {
+		"default_speaker_name": "2B",
+		"def_struct": def_struct,
+		"language": "English",
+		"speed": "0.8"
+	}
+
+	myJSON = json.dumps(default_vals, indent=2)
+
 	with open ('config.json', 'w') as jsonfile:
 		jsonfile.write(myJSON)
-		jsonfile.close()
 
 # Load the language data
 with open(Path('languages.json'), encoding='utf8') as f:
 	languages = json.load(f)
 
-# Load config data
-with open(Path('config.json'), encoding='utf8') as jsonfile:
-	config = json.load(jsonfile)
-	
-	default_speaker_name = config['default_speaker_name']
-	def_struct = config['def_struct']
-	language = config['language']
-	speed = config['speed']
-	jsonfile.close()
-	
-print (default_speaker_name)
-	
+# Check if config is valid and Load config data
+if os.path.isfile('config.json'):
+	try:
+		with open(Path('config.json'), encoding='utf8') as jsonfile:
+			config = json.load(jsonfile)
+
+		default_speaker_name = config['default_speaker_name']
+		def_struct = config['def_struct']
+		language = config['language']
+		speed = config['speed']
+
+	except json.JSONDecodeError:
+		print(f"Error decoding JSON.")
+	except Exception as e:
+		print(f"An error occurred while loading config data: {e}")
+else:
+	print(f"{config_file_path} does not exist.")
+
+
 # Gradio Blocks interface
 with gr.Blocks() as app:
 	gr.Markdown("### TTS based Voice Cloning.")
-	
-	with gr.Tab("Voice Generation"):	
+
+	with gr.Tab("Voice Generation"):
 		with gr.Row():
 			with gr.Column():
 				text_input = gr.Textbox(lines=2, label="Speechify this Text",value="Even in the darkest nights, a single spark of hope can ignite the fire of determination within us, guiding us towards a future we dare to dream.")
@@ -174,80 +235,101 @@ with gr.Blocks() as app:
 						speaker_dropdown = update_dropdown()
 					with gr.Column():
 						language_dropdown = gr.Dropdown(list(languages.keys()), label="Language/Accent", value="English")
-				
-				submit_button = gr.Button("Convert")
 
+				submit_button = gr.Button("Convert")
+################## TODO: Clear Button?
 			with gr.Column():
 				audio_output = gr.Audio()
-							
+
 				with gr.Row():
 					# Column for filename structure
 					with gr.Column():
-						#TODO
+#########################TODO
 						filename_struct = gr.Textbox(label="Filename structure", value = fl_name)
 					with gr.Column():
-						#TODO
+#########################TODO
 						download_input = gr.Textbox(label="Overwrite filename", placeholder="Enter a custom name for the generated audio")
 				with gr.Row():
-					#TODO
+#####################TODO
 					# Download Button
 					download_button = gr.Button("Download", link = output_file)
 
-	with gr.Tab("Voice cloning and management"):				
-		gr.Markdown("### Speaker Selection and Voice Cloning")	 
+	with gr.Tab("Voice cloning and management"):
+		gr.Markdown("### Speaker Selection and Voice Cloning")
 
 		with gr.Row():
 			with gr.Column():
 				#Enter new Name
 				filename_input = gr.Textbox(label="Add new Speaker", placeholder="Enter a name for your recording/upload to save as")
 			with gr.Column():
+				speaker_dropdown = update_dropdown()
+
+		with gr.Row():
+			with gr.Column():
 				#Save a new speaker
 				save_button = gr.Button("Save Below Recording")
-				#Update Dropdown with new values
-				#speaker_dropdown = update_dropdown()
-				refresh_button = gr.Button("Refresh Speakers")
-				
+			with gr.Column():
+				#Delete selected Speaker
+				delete_speaker_button = gr.Button("Delete selected speaker")
+				delete_speaker_button.click(
+					fn=del_speaker, #function,
+					inputs=[speaker_dropdown], #vars,
+					outputs=speaker_dropdown) #gradio_component to use)
+
 		with gr.Row():
 			with gr.Column():
 				#Set as default Speaker
 				default_speaker_button = gr.Button("Set as default speaker")
 				default_speaker_button.click(
 					fn=set_default_speaker,
-					inputs=[speaker_dropdown.value], #vars,
+					inputs=[speaker_dropdown], #vars,
 					outputs=speaker_dropdown)
 			#
 			with gr.Column():
-				#Delete selected Speaker
-				delete_speaker_button = gr.Button("Delete selected speaker")
-				delete_speaker_button.click(
-					fn=del_speaker, #function,
-					inputs=[speaker_dropdown.value], #vars,
-					outputs=speaker_dropdown) #gradio_component to use)		
-			
+				#Update Dropdown with new values
+	############# Replace with Rename Function?
+				refresh_button = gr.Button("Refresh Speakers")
+
 			refresh_button.click(fn=update_dropdown, inputs=[], outputs=speaker_dropdown)
-			
+
 		with gr.Row():
 			record_button = gr.Audio(label="Record Your Voice")
 
 		save_button.click(
-			fn=handle_recorded_audio, 
-			inputs=[record_button, speaker_dropdown, filename_input], 
+			fn=handle_recorded_audio,
+			inputs=[record_button, speaker_dropdown, filename_input],
 			outputs=speaker_dropdown)
 		record_button.stop_recording(
-			fn=handle_recorded_audio, 
-			inputs=[record_button, filename_input], 
+			fn=handle_recorded_audio,
+			inputs=[record_button, speaker_dropdown, filename_input],
 			outputs=speaker_dropdown)
 		record_button.upload(
-			fn=handle_recorded_audio, 
-			inputs=[record_button, filename_input], 
+			fn=handle_recorded_audio,
+			inputs=[record_button, speaker_dropdown, filename_input],
 			outputs=speaker_dropdown)
-				
+
 	with gr.Tab("Outputs"):
-		#TODO
-		gr.FileExplorer(glob=".wav", root="outputs/", height = 200)
-		
+#########TODO
+		gr.Markdown("### Output Archive - Download generated files")
+		gr.FileExplorer(glob=".wav", root='Outputs', label="Select files to download", every=60.0, height = 300.0)
+		gr.FileExplorer(label="Outputs", every=60.0, height = 300.0)
+#def download_file(file_path):
+    # Implement your logic to handle the selected file
+    # For simplicity, this example assumes 'file_path' is the path to the file
+#    return open(file_path, 'rb').read()
+
+#file_explorer = gr.FileExplorer(glob="*", label="Select a file")
+
+# Output component with a download link/button
+#output = gr.Output(label="Download Link")
+
+#def update_output(file_path):
+#    if file_path:
+#        file_content = download_file(file_path)
+#        output.update(f'<a href="data:application/octet-stream;base64,{gr.utils.base64_encode(file_content)}" download="{file_path}">Download File</a>')
+
 	with gr.Tab("Settings"):
-		#TODO
+#########TODO
 		#json_data = display_json("/onfig.json")
 		gr.JSON(label="Configuration") #, value=json_data)
 
