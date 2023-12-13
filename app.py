@@ -82,14 +82,6 @@ def display_json(file_path):
             return json_content
     except Exception as e:
         return f"Error: {str(e)}"
-	
-def set_default_speaker(speaker_dropdown):
-	#TODO
-	update_config('default_speaker_name',)
-
-def del_speaker(speaker_dropdown):
-	#TODO
-	print("Test")
 
 def update_config(key,value):
 	with open ('config.json', 'r') as jsonfile:
@@ -101,6 +93,19 @@ def update_config(key,value):
 		myJSON = json.dump(data, jsonfile)
 		jsonfile.close()
 
+def set_default_speaker(new_default):
+	#TODO
+	default_speaker_name = new_default
+	update_config('default_speaker_name',)
+
+def del_speaker(speaker_del):
+	#TODO
+	del_path = 'targets' + speaker_del + '.wav'
+	if os.path.exists(del_path):
+		os.remove(del_path)
+	else:
+		print("The file does not exist.")
+	
 def update_speakers():
 	speakers = {p.stem: str(p) for p in list(Path('targets').glob("*.wav"))}
 	return list(speakers.keys())
@@ -208,7 +213,7 @@ with gr.Blocks() as app:
 				default_speaker_button = gr.Button("Set as default speaker")
 				default_speaker_button.click(
 					fn=set_default_speaker,
-					inputs=[speaker_dropdown], #vars,
+					inputs=[speaker_dropdown.value], #vars,
 					outputs=speaker_dropdown)
 			#
 			with gr.Column():
@@ -216,7 +221,7 @@ with gr.Blocks() as app:
 				delete_speaker_button = gr.Button("Delete selected speaker")
 				delete_speaker_button.click(
 					fn=del_speaker, #function,
-					inputs=[speaker_dropdown], #vars,
+					inputs=[speaker_dropdown.value], #vars,
 					outputs=speaker_dropdown) #gradio_component to use)		
 			
 			refresh_button.click(fn=update_dropdown, inputs=[], outputs=speaker_dropdown)
