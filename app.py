@@ -31,7 +31,7 @@ device = None
 #GET RID OF THIS?
 # Set the default speaker name
 default_speaker_name = "Rogger"
-def_struct = 'string_ul'
+def_struct = 'spk + string_ul'
 fl_name = ''#'outputs/' + def_struct + '.wav'
 output_file = Path(fl_name)
 
@@ -187,7 +187,7 @@ def handle_recorded_audio(audio_data, speaker_dropdown, filename_input): # = "us
 if not os.path.isfile('config.json'):
 	# Default config values for creation
 	default_vals = {
-		"default_speaker_name": "2B",
+		"default_speaker_name": default_speaker_name,
 		"def_struct": def_struct,
 		"language": "English",
 		"speed": "0.8"
@@ -313,7 +313,9 @@ with gr.Blocks() as app:
 		gr.Markdown("### Output Archive - Download generated files")
 		gr.FileExplorer(glob=".wav", root='Outputs', label="Select files to download", every=60.0, height = 300.0)
 		gr.FileExplorer(label="Outputs", every=60.0, height = 300.0)
-#def download_file(file_path):
+
+		output = gr.Output(label="Download")
+	#def download_file(file_path):
     # Implement your logic to handle the selected file
     # For simplicity, this example assumes 'file_path' is the path to the file
 #    return open(file_path, 'rb').read()
