@@ -5,10 +5,15 @@ import random
 import json
 from pathlib import Path
 from TTS.api import TTS
+from zipfile import ZipFile
 import uuid
 import html
 import soundfile as sf
 import os
+import requests
+import hashlib
+#import tqdm
+#import time
 
 def is_mac_os():
 	return platform.system() == 'Darwin'
@@ -34,6 +39,14 @@ default_speaker_name = "Rogger"
 def_struct = 'spk + string_ul'
 fl_name = ''#'outputs/' + def_struct + '.wav'
 output_file = Path(fl_name)
+my_waveform = {
+	"waveform_color": "white",
+	"waveform_progress_color": "orange",
+	"show_controls": False,
+	"skip_length": 0.5
+}
+
+#print(gr.__version__)
 
 # Decide on Hardware to use
 if is_mac_os():
@@ -70,14 +83,17 @@ def gen_voice(string, spk, speed, english):
 	return output_file
 
 # Display content of config.json
-# TODO
 def display_json(file_path):
     try:
         with open(file_path, 'r') as file:
-            json_content = file.read()
+            json_content = json.load(file)
             return json_content
     except Exception as e:
         return f"Error: {str(e)}"
+
+# Refresh config.json display
+def refresh_json():
+	return gr.update(display_json("config.json"))
 
 # Update config with new value
 def update_config(key, value):
@@ -93,21 +109,172 @@ def update_config(key, value):
 		json.dump(data, jsonfile, indent=2)
 		#jsonfile.close()
 
-# Get a list of .wav files in directory
-def get_wav_files(folder_path):
-	wav_files = [f for f in os.listdir(folder_path) if f.endswith(".wav")]
-	return wav_files
+# Get config Values
+def get_config_val(key, subkey=None):
+	try:
+		with open ('config.json', 'r') as jsonfile:
+			data = json.load(jsonfile)
+	except FileNotFoundError:
+		data = {}
+
+	conf_value = data.get(key, {})
+
+	if subkey:
+		conf_value = conf_value.get(subkey, None)
+
+	return conf_value
+
+# Zip files for download
+def zipped_download(selected_files):
+	with ZipFile("temp/generated_audio.zip","w") as zipObj:
+		for file_path in selected_files:
+			if os.path.exists(file_path):
+				zipObj.write(file_path, arcname=os.path.basename(file_path))
+			else:
+				return None
+	url = "/file=temp/" + "generated_audio.zip"
+	return url #"tmp.zip"
+
+# Download handler
+def get_selected(selected_files):
+	if len(selected_files) >= 1:
+		download_link = zipped_download(selected_files)
+		if download_link == None:
+			return gr.update(interactive=False)
+		else:
+			return gr.Button(value = "Download", link = download_link, interactive = True)
+	else:
+		return gr.Button(value = "Download", link = "", interactive = False)
+
+# Outputs Preview handler
+def playfile(selected_files):
+	if len(selected_files) == 0:
+		return gr.Audio(label="Preview", visible = False)
+	else:
+		file = selected_files[0]
+		if os.path.exists(file):
+			folder, filename = os.path.split(file)
+			url = "outputs/" + filename
+		else:
+			gr.Warning("File does not exist anymore.\n\nPlease select another file for playback.")
+			return gr.update(visible = False)
+	if len(selected_files) > 1:
+		gr.Info('Please select only 1 file at a time for playback!\n\nOnly the first selected file in list will be available for playback.')
+		return gr.update(value = url, visible = True)
+	else:
+		return gr.update(value = url, visible = True, show_download_button = True, show_share_button = True, format = 'wav')
+
+# Output deletion selection handler
+def del_output_sel(selected_files, admin_state):
+	#print(selected_files)
+	if len(selected_files) == 0:
+		#return gr.Button(value = "Delete", interactive = False)
+		return gr.update(interactive = False)
+	else:
+		for file in selected_files:
+			if os.path.exists(file) and admin_state == True:
+				#return gr.Button(value = "Delete", interactive = True)
+				return gr.update(interactive = True)
+			else:
+				return gr.update(interactive = False)
+
+# Delete Button Function
+def del_files(selected_files):
+	for file in selected_files:
+		if os.path.exists(file):
+			folder, filename = os.path.split(file)
+			del_path = 'outputs/' + filename
+		else:
+			return (
+				gr.update(interactive = False),
+				#gr.Button(value = "Delete", interactive = False),
+				gr.update(value = [])
+				#gr.FileExplorer(glob = '*.wav', root="outputs", label="Select files to download", height = 400.0)
+			)
+		if os.path.exists(del_path):
+			os.remove(del_path)
+			return(
+				#gr.Button(value = "Delete", interactive = False),
+				gr.update(interactive = False),
+				#gr.FileExplorer(glob = '*.wav', root="outputs", label="Select files to download", height = 400.0)
+				gr.update(choices=list_dir(), value = [])#gr.update(value=[], label="leler")
+			)
+		else:
+			print("The file does not exist: " + del_path)
+			return(
+				gr.update(interactive = False),
+				#gr.Button(value = "Delete", interactive = False),
+				gr.update(value = [])
+				#gr.FileExplorer(glob = '*.wav', root="outputs", label="Select files to download", height = 400.0)
+			)
+
+def list_dir():
+	pathlist = []
+	filelist = []
+	fullpath = os.getcwd() + "/outputs/"
+	for path in os.listdir("outputs"):
+		if os.path.isfile(os.path.join("outputs", path)):
+			folder, ext = os.path.splitext(path)
+			if ext == ".wav":
+				pathlist.append(fullpath + path)
+				filelist.append(path)
+
+			pathlist = sorted(pathlist, key=str.casefold)
+			filelist = sorted(filelist, key=str.casefold)
+
+	return list(map(lambda x, y:(x,y), filelist,pathlist))
+
+
+#def loading(progress=gr.Progress()):
+#	sels = [None] * len(file_explorer)
+#	for sel in progress.tqdm(sels, desc="Beschreibung"):
+#		time.sleep(0.1)
+#	return gr.update(label="Updated?")
+
+# Targets Preview handler
+def playfile_target(selected_files):
+	if selected_files:
+		if len(selected_files) > 1:
+			file = selected_files
+			if os.path.exists(file):
+				folder, filename = os.path.split(file)
+				url = "targets/" + filename
+				return gr.update(value = url, show_download_button = True)
+			else:
+				return gr.update(visible=False, value=None)
+		else:
+			return gr.update(visible = False, value=None)
+	else:
+		return gr.update(visible = False, value=None)
+
+# Selection button handler
+def update_explorer(drop_explorer):
+	pathlist = []
+	count = 0
+	fullpath = os.getcwd() + "/outputs/"
+	for path in os.listdir("outputs"):
+		if os.path.isfile(os.path.join("outputs", path)):
+			folder, ext = os.path.splitext(path)
+			if ext == ".wav":
+				count += 1
+				pathlist.append(fullpath + path)
+
+	if len(drop_explorer) < count:
+		return gr.update(value = pathlist)
+
+	elif len(drop_explorer) == count or len(drop_explorer) >= 0:
+		# empty list
+		return gr.update(value = [])
 
 # Save currently selected Speaker (dropbox) as default in config
 def set_default_speaker(speaker_dropdown):
-	#print(speaker_dropdown)
 	sel_speaker = speaker_dropdown
-	print(sel_speaker)
+	#print(sel_speaker)
 	update_config('default_speaker_name', sel_speaker)
 	return gr.Dropdown(choices=update_speakers(), value=get_config_val('default_speaker_name'), label="Select Speaker")
 
 # Delete currently selected Speaker (Dropbox)
-def del_speaker(speaker_dropdown):
+def del_speaker(speaker_dropdown, admin_state):
 	speaker_del = speaker_dropdown
 	del_path = 'targets/' + speaker_del + '.wav'
 	if os.path.exists(del_path):
@@ -122,20 +289,10 @@ def update_speakers():
 	speakers = {p.stem: str(p) for p in list(Path('targets').glob("*.wav"))}
 	return list(speakers.keys())
 
-def get_config_val(key):
-	try:
-		with open ('config.json', 'r') as jsonfile:
-			data = json.load(jsonfile)
-	except FileNotFoundError:
-		data = {}
-
-	conf_value = data[key]
-	return conf_value
-
 # Create Dropdown
 # update_speakers () = list of voices
 def update_dropdown(_=None, selected_speaker=default_speaker_name):
-	return gr.Dropdown(choices=update_speakers(), value=selected_speaker, label="Select Speaker")
+	return gr.Dropdown(choices=update_speakers(), value=selected_speaker, label="Select Speaker", filterable=True)
 
 # Target filename Check
 def modify_filename(save_path):
@@ -153,6 +310,18 @@ def modify_filename(save_path):
 		#print(save_path)
 		#print(filename)
 	return save_path, filename
+
+# handle password Box
+def comp_pw(text, admin_state):
+	#pl34Sed0n'Tabu5eMe
+	password = "91f0660bb9cf2d91875508527cbf46a8"
+	enc_text = text.encode('utf-8')
+	if hashlib.md5(enc_text).hexdigest() == password:
+		admin_state = True
+		return admin_state
+	else:
+		admin_state = False
+		return admin_state
 
 # Handle audio
 def handle_recorded_audio(audio_data, speaker_dropdown, filename_input): # = "user_entered"):
@@ -190,7 +359,12 @@ if not os.path.isfile('config.json'):
 		"default_speaker_name": default_speaker_name,
 		"def_struct": def_struct,
 		"language": "English",
-		"speed": "0.8"
+		"speed": "0.8",
+		"launch":{
+			"paths": [],
+			"browser": False,
+			"share": False
+		}
 	}
 
 	myJSON = json.dumps(default_vals, indent=2)
@@ -221,23 +395,40 @@ else:
 	print(f"{config_file_path} does not exist.")
 
 
+
+################################################################################
 # Gradio Blocks interface
-with gr.Blocks() as app:
+with gr.Blocks(mode = "MK99", title = "MK99 - TTS Gen") as app:
 	gr.Markdown("### TTS based Voice Cloning.")
+	admin_state = gr.State(
+		value=False
+	)
 
 	with gr.Tab("Voice Generation"):
 		with gr.Row():
 			with gr.Column():
-				text_input = gr.Textbox(lines=2, label="Speechify this Text",value="Even in the darkest nights, a single spark of hope can ignite the fire of determination within us, guiding us towards a future we dare to dream.")
-				speed_slider = gr.Slider(label='Speed', minimum=0.1, maximum=1.99, value=0.8, step=0.01)
+				text_input = gr.Textbox(
+					lines=2,
+					label="Speechify this Text",
+					value="Even in the darkest nights, a single spark of hope can ignite the fire of determination within us, guiding us towards a future we dare to dream."
+				)
+				speed_slider = gr.Slider(
+					label='Speed',
+					minimum=0.1,
+					maximum=1.99,
+					value=0.8,
+					step=0.01
+				)
 				with gr.Row():
 					with gr.Column():
+						#SYNC!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 						speaker_dropdown = update_dropdown()
 					with gr.Column():
 						language_dropdown = gr.Dropdown(list(languages.keys()), label="Language/Accent", value="English")
 
 				submit_button = gr.Button("Convert")
 ################## TODO: Clear Button?
+				#CANCELBUTTON FÜR RAPHAEL
 			with gr.Column():
 				audio_output = gr.Audio()
 
@@ -245,14 +436,26 @@ with gr.Blocks() as app:
 					# Column for filename structure
 					with gr.Column():
 #########################TODO
-						filename_struct = gr.Textbox(label="Filename structure", value = fl_name)
+						filename_struct = gr.Textbox(
+							label="Filename structure",
+							value = fl_name
+						)
 					with gr.Column():
 #########################TODO
-						download_input = gr.Textbox(label="Overwrite filename", placeholder="Enter a custom name for the generated audio")
+						download_input = gr.Textbox(
+							label="Overwrite filename",
+							placeholder="Enter a custom name for the generated audio"
+						)
 				with gr.Row():
 #####################TODO
 					# Download Button
 					download_button = gr.Button("Download", link = output_file)
+
+		submit_button.click(
+			fn=gen_voice,
+			inputs=[text_input, speaker_dropdown, speed_slider, language_dropdown],
+			outputs=audio_output
+		)
 
 	with gr.Tab("Voice cloning and management"):
 		gr.Markdown("### Speaker Selection and Voice Cloning")
@@ -260,7 +463,9 @@ with gr.Blocks() as app:
 		with gr.Row():
 			with gr.Column():
 				#Enter new Name
-				filename_input = gr.Textbox(label="Add new Speaker", placeholder="Enter a name for your recording/upload to save as")
+				filename_input = gr.Textbox(label="Add new Speaker",
+					placeholder="Enter a name for your recording/upload to save as"
+				)
 			with gr.Column():
 				speaker_dropdown = update_dropdown()
 
@@ -270,10 +475,13 @@ with gr.Blocks() as app:
 				save_button = gr.Button("Save Below Recording")
 			with gr.Column():
 				#Delete selected Speaker
-				delete_speaker_button = gr.Button("Delete selected speaker")
+				delete_speaker_button = gr.Button(
+					value="🗑️ Delete selected speaker",
+					interactive=False
+				)
 				delete_speaker_button.click(
 					fn=del_speaker, #function,
-					inputs=[speaker_dropdown], #vars,
+					inputs=[speaker_dropdown, admin_state], #vars,
 					outputs=speaker_dropdown) #gradio_component to use)
 
 		with gr.Row():
@@ -290,10 +498,31 @@ with gr.Blocks() as app:
 	############# Replace with Rename Function?
 				refresh_button = gr.Button("Refresh Speakers")
 
-			refresh_button.click(fn=update_dropdown, inputs=[], outputs=speaker_dropdown)
+			refresh_button.click(
+				fn=update_dropdown,
+				inputs=[],
+				outputs=speaker_dropdown
+			)
 
 		with gr.Row():
-			record_button = gr.Audio(label="Record Your Voice")
+			record_button = gr.Audio(
+				label="Record Your Voice"
+			)
+
+		with gr.Row():
+			with gr.Accordion(label="Download Voice", open=False):
+				target_explorer = gr.FileExplorer(
+					glob= '*.wav',
+					root="targets",
+					label="Preview / Download Voice",
+					height = 200.0,
+					file_count = 'single'
+				)
+				with gr.Row():
+					previewfile_target = gr.Audio(
+						label="Preview",
+						interactive=False
+					)
 
 		save_button.click(
 			fn=handle_recorded_audio,
@@ -307,39 +536,119 @@ with gr.Blocks() as app:
 			fn=handle_recorded_audio,
 			inputs=[record_button, speaker_dropdown, filename_input],
 			outputs=speaker_dropdown)
+		target_explorer.change(
+			fn=playfile_target,
+			inputs=[target_explorer],
+			outputs= previewfile_target,
+			queue = False
+		)
 
 	with gr.Tab("Outputs"):
-#########TODO
 		gr.Markdown("### Output Archive - Download generated files")
-		gr.FileExplorer(glob=".wav", root='Outputs', label="Select files to download", every=60.0, height = 300.0)
-		gr.FileExplorer(label="Outputs", every=60.0, height = 300.0)
 
-		output = gr.Output(label="Download")
-	#def download_file(file_path):
-    # Implement your logic to handle the selected file
-    # For simplicity, this example assumes 'file_path' is the path to the file
-#    return open(file_path, 'rb').read()
+		with gr.Group():
+			with gr.Row():
+				#file_explorer = gr.FileExplorer(glob = '*.wav', root="outputs", label="Select files to download", height = 400.0, interactive = True)
+				drop_explorer = gr.Dropdown(
+					choices=list_dir(),
+					label="Select files to download",
+					interactive = True,
+					filterable=True,
+					multiselect=True
+				)
 
-#file_explorer = gr.FileExplorer(glob="*", label="Select a file")
+			with gr.Row():
+				with gr.Column(scale=0, min_width=200):
+					selectall_button = gr.Button(
+						value = "(Un-)Select all"
+					)
 
-# Output component with a download link/button
-#output = gr.Output(label="Download Link")
+				with gr.Column(scale=2):
+					download_button = gr.Button(
+						value = "Download",
+						interactive = False
+					)
 
-#def update_output(file_path):
-#    if file_path:
-#        file_content = download_file(file_path)
-#        output.update(f'<a href="data:application/octet-stream;base64,{gr.utils.base64_encode(file_content)}" download="{file_path}">Download File</a>')
+				with gr.Column(scale=0, min_width=100):
+					delete_button = gr.Button(
+						value = "🗑️",
+						interactive = False
+					)
+
+			with gr.Row():
+				previewfile = gr.Audio(
+					label="Preview",
+					visible = False,
+					interactive = False,
+					waveform_options=my_waveform
+				)
+
+		# Handle selection for donwload button
+		drop_explorer.change(
+			fn=get_selected,
+			inputs=[drop_explorer],
+			outputs=download_button
+		)
+		# Handle selection for Playback
+		drop_explorer.change(
+			fn=playfile,
+			inputs=[drop_explorer],
+			outputs=previewfile
+		)
+		# Handle selection for deletion
+		drop_explorer.change(
+			fn=del_output_sel,
+			inputs=[drop_explorer, admin_state],
+			outputs=delete_button
+		)
+
+		delete_button.click(
+			fn=del_files,
+			inputs=[drop_explorer],
+			outputs=[delete_button, drop_explorer]
+		)
+		selectall_button.click(
+			fn=update_explorer,
+			inputs = [drop_explorer],
+			outputs=drop_explorer
+		)
 
 	with gr.Tab("Settings"):
 #########TODO
-		#json_data = display_json("/onfig.json")
-		gr.JSON(label="Configuration") #, value=json_data)
+		with gr.Group():
+			with gr.Row(equal_height=True):
+				with gr.Column():
+					gr.Markdown("### Saved Configurations:")
+					json_comp = gr.JSON(
+						value=display_json("config.json"),
+						label="Configuration"
+					)
 
+				with gr.Column():
+					gr.Markdown("### Admin Access:")
+					pw_text = gr.Textbox(
+						label="Admin password",
+						placeholder="Enter the password...",
+						type="password",
+						autofocus=True,
+						info="Entering the correct password will enable the use of certain buttons in the other tabs."
+					)
 
-	submit_button.click(
-		fn=gen_voice,
-		inputs=[text_input, speaker_dropdown, speed_slider, language_dropdown],
-		outputs=audio_output
+			with gr.Row():
+				share_check = gr.Checkbox()
+				browser_check = gr.Checkbox()
+
+	pw_text.input(
+		fn=comp_pw,
+		inputs=[pw_text,admin_state],
+		outputs=admin_state,
+		show_progress="hidden"
+	)
+####
+	json_comp.change(
+		fn=refresh_json,
+		inputs=[],
+		outputs=json_comp
 	)
 
 if __name__ == "__main__":
@@ -348,4 +657,21 @@ if __name__ == "__main__":
 #		app.launch(share=True)
 #	else:
 #		app.launch()
-	 app.launch()
+	paths_val = get_config_val("launch", "paths")
+	browser_val = get_config_val("launch", "browser")
+	share_val = get_config_val("launch", "share")
+	print(browser_val)
+
+	app.launch(allowed_paths=["/home/mk99/xtts2-ui/outputs/","/home/mk99/xtts2-ui/temp/"], inbrowser=True, favicon_path="mk99.ico")
+
+
+# REQUIRES FFMPEG
+#				waveform = gr.make_waveform(
+#					audio="outputs/2B-a88498e0.wav",
+#					bg_color="pink",
+#					fg_alpha=0.5,
+#					bars_color=("white", "orange"),
+#					bar_count = 100,
+#					bar_width = 0.5,
+#					animate = True
+#				)

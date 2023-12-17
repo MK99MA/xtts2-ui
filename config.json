@@ -1,0 +1,11 @@
+{
+  "default_speaker_name": "Benjamin_Test",
+  "def_struct": "spk + string_ul",
+  "language": "English",
+  "speed": "0.8",
+  "launch": {
+    "paths": [],
+    "browser": false,
+    "share": false
+  }
+}
