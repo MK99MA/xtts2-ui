@@ -82,6 +82,27 @@ def gen_voice(string, spk, speed, english):
 	)
 	return output_file
 
+# Create Configuration
+def createConfig():
+	#Check if config exists
+	if not os.path.isfile('config.json'):
+		# Default config values for creation
+		default_vals = {
+			"default_speaker_name": default_speaker_name,
+			"def_struct": def_struct,
+			"language": "English",
+			"speed": "0.8",
+			"launch":{
+				"browser": False,
+				"share": False
+			}
+		}
+
+		myJSON = json.dumps(default_vals, indent=2)
+
+		with open ('config.json', 'w') as jsonfile:
+			jsonfile.write(myJSON)
+
 # Display content of config.json
 def display_json(file_path):
     try:
@@ -96,14 +117,18 @@ def refresh_json():
 	return gr.update(display_json("config.json"))
 
 # Update config with new value
-def update_config(key, value):
+def update_config(key, value, subkey=None):
 	try:
 		with open ('config.json', 'r') as jsonfile:
 			data = json.load(jsonfile)
 	except FileNotFoundError:
 		data = {}
 
-	data[key] = value
+	if subkey:
+		data[key] = data.get(key, {})
+		data[key][subkey] = value
+	else:
+		data[key] = value
 
 	with open('config.json', 'w') as jsonfile:
 		json.dump(data, jsonfile, indent=2)
@@ -123,6 +148,36 @@ def get_config_val(key, subkey=None):
 		conf_value = conf_value.get(subkey, None)
 
 	return conf_value
+
+def share_handler(checkbox, admin_state):
+	if admin_state:
+		if checkbox:
+			update_config("launch", True, "share")
+			gr.Info("Public sharing has been enabled for the next start!")
+		else:
+			update_config("launch", False, "share")
+			gr.Info("Public sharing has been disabled for the next start!")
+
+		return gr.update()
+	else:
+		gr.Warning("You have to enter the admin password to change this value.")
+		if checkbox:
+			return gr.update(value=False)
+		else:
+			return gr.update(value=True)
+
+
+# handle password Box
+def comp_pw(text, admin_state):
+	#pl34Sed0n'Tabu5eMe
+	password = "91f0660bb9cf2d91875508527cbf46a8"
+	enc_text = text.encode('utf-8')
+	if hashlib.md5(enc_text).hexdigest() == password:
+		admin_state = True
+		return admin_state
+	else:
+		admin_state = False
+		return admin_state
 
 # Zip files for download
 def zipped_download(selected_files):
@@ -186,26 +241,32 @@ def del_files(selected_files):
 			del_path = 'outputs/' + filename
 		else:
 			return (
-				gr.update(interactive = False),
+				gr.update(visible=True, interactive = False),
 				#gr.Button(value = "Delete", interactive = False),
-				gr.update(value = [])
+				gr.update(value = []),
 				#gr.FileExplorer(glob = '*.wav', root="outputs", label="Select files to download", height = 400.0)
+				gr.update(visible=False),
+				gr.update(visible=False)
 			)
 		if os.path.exists(del_path):
 			os.remove(del_path)
 			return(
 				#gr.Button(value = "Delete", interactive = False),
-				gr.update(interactive = False),
+				gr.update(visible=True, interactive = False),
 				#gr.FileExplorer(glob = '*.wav', root="outputs", label="Select files to download", height = 400.0)
-				gr.update(choices=list_dir(), value = [])#gr.update(value=[], label="leler")
+				gr.update(choices=list_dir(), value = []),
+				gr.update(visible=False),
+				gr.update(visible=False)
 			)
 		else:
 			print("The file does not exist: " + del_path)
 			return(
-				gr.update(interactive = False),
+				gr.update(visible=True, interactive = False),
 				#gr.Button(value = "Delete", interactive = False),
-				gr.update(value = [])
+				gr.update(value = []),
 				#gr.FileExplorer(glob = '*.wav', root="outputs", label="Select files to download", height = 400.0)
+				gr.update(visible=False),
+				gr.update(visible=False)
 			)
 
 def list_dir():
@@ -311,18 +372,6 @@ def modify_filename(save_path):
 		#print(filename)
 	return save_path, filename
 
-# handle password Box
-def comp_pw(text, admin_state):
-	#pl34Sed0n'Tabu5eMe
-	password = "91f0660bb9cf2d91875508527cbf46a8"
-	enc_text = text.encode('utf-8')
-	if hashlib.md5(enc_text).hexdigest() == password:
-		admin_state = True
-		return admin_state
-	else:
-		admin_state = False
-		return admin_state
-
 # Handle audio
 def handle_recorded_audio(audio_data, speaker_dropdown, filename_input): # = "user_entered"):
 	if not audio_data:
@@ -352,25 +401,7 @@ def handle_recorded_audio(audio_data, speaker_dropdown, filename_input): # = "us
 	updated_dropdown = update_dropdown(selected_speaker=filename)
 	return updated_dropdown
 
-#Check if config exists
-if not os.path.isfile('config.json'):
-	# Default config values for creation
-	default_vals = {
-		"default_speaker_name": default_speaker_name,
-		"def_struct": def_struct,
-		"language": "English",
-		"speed": "0.8",
-		"launch":{
-			"paths": [],
-			"browser": False,
-			"share": False
-		}
-	}
-
-	myJSON = json.dumps(default_vals, indent=2)
-
-	with open ('config.json', 'w') as jsonfile:
-		jsonfile.write(myJSON)
+createConfig()
 
 # Load the language data
 with open(Path('languages.json'), encoding='utf8') as f:
@@ -558,7 +589,7 @@ with gr.Blocks(mode = "MK99", title = "MK99 - TTS Gen") as app:
 				)
 
 			with gr.Row():
-				with gr.Column(scale=0, min_width=200):
+				with gr.Column(scale=0, min_width=150):
 					selectall_button = gr.Button(
 						value = "(Un-)Select all"
 					)
@@ -569,10 +600,20 @@ with gr.Blocks(mode = "MK99", title = "MK99 - TTS Gen") as app:
 						interactive = False
 					)
 
-				with gr.Column(scale=0, min_width=100):
+				with gr.Column(scale=0, min_width=150):
 					delete_button = gr.Button(
 						value = "🗑️",
 						interactive = False
+					)
+					# LAYOUT!!
+					confirm_button = gr.Button(
+						value = "✔️",
+						variant = "primary",
+						visible = False
+					)
+					cancel_button = gr.Button(
+						value = "❌",
+						visible = False
 					)
 
 			with gr.Row():
@@ -589,24 +630,45 @@ with gr.Blocks(mode = "MK99", title = "MK99 - TTS Gen") as app:
 			inputs=[drop_explorer],
 			outputs=download_button
 		)
+
 		# Handle selection for Playback
 		drop_explorer.change(
 			fn=playfile,
 			inputs=[drop_explorer],
 			outputs=previewfile
 		)
+
 		# Handle selection for deletion
 		drop_explorer.change(
 			fn=del_output_sel,
 			inputs=[drop_explorer, admin_state],
-			outputs=delete_button
+			outputs=delete_button #HIDE CONFIRM / CANCEL
 		)
 
+#		delete_button.click(
+#			fn=del_files,
+#			inputs=[drop_explorer],
+#			outputs=[delete_button, drop_explorer]
+#		)
+
 		delete_button.click(
+			fn=lambda :[gr.update(visible=False), gr.update(visible=True), gr.update(visible=True)],
+			inputs=None,
+			outputs=[delete_button, confirm_button, cancel_button]
+		)
+
+		confirm_button.click(
 			fn=del_files,
 			inputs=[drop_explorer],
-			outputs=[delete_button, drop_explorer]
+			outputs=[delete_button, drop_explorer, confirm_button, cancel_button]
 		)
+
+		cancel_button.click(
+			fn=lambda :[gr.update(visible=True), gr.update(visible=False), gr.update(visible=False)],
+			inputs=None,
+			outputs=[delete_button, confirm_button, cancel_button]
+		)
+
 		selectall_button.click(
 			fn=update_explorer,
 			inputs = [drop_explorer],
@@ -635,8 +697,14 @@ with gr.Blocks(mode = "MK99", title = "MK99 - TTS Gen") as app:
 					)
 
 			with gr.Row():
-				share_check = gr.Checkbox()
-				browser_check = gr.Checkbox()
+				share_check = gr.Checkbox(
+					label="Create public link?",
+					info="Enable to activate app sharing at launch (Requires restart)"
+				)
+				browser_check = gr.Checkbox(
+					label="Open Browser?",
+					info="Enable to automatically open the browser at start. (Requires restart)"
+				)
 
 	pw_text.input(
 		fn=comp_pw,
@@ -644,6 +712,19 @@ with gr.Blocks(mode = "MK99", title = "MK99 - TTS Gen") as app:
 		outputs=admin_state,
 		show_progress="hidden"
 	)
+
+	share_check.change(
+		fn=share_handler,
+		inputs=[share_check, admin_state],
+		outputs=share_check
+	)
+
+#	browser_check.change(
+#		fn=browser_handler,
+#		inputs=[browser_check, admin_state]
+#	)
+
+
 ####
 	json_comp.change(
 		fn=refresh_json,
@@ -652,17 +733,26 @@ with gr.Blocks(mode = "MK99", title = "MK99 - TTS Gen") as app:
 	)
 
 if __name__ == "__main__":
-#	public = input("Launch with public URL? (Y/N)")
-#	if public.lower() == 'y' or public.lower() == 'yes':
-#		app.launch(share=True)
-#	else:
-#		app.launch()
-	paths_val = get_config_val("launch", "paths")
+	# Get current dir
+	root_dir = os.getcwd()
+	# Set Output folder
+	out_path = root_dir + "/outputs"
+	# Set Target folder
+	tar_path = root_dir + "/targets"
+	# Set Temp folder
+	temp_path = root_dir + "/temp"
+
+	# Get Launch parameters
 	browser_val = get_config_val("launch", "browser")
 	share_val = get_config_val("launch", "share")
-	print(browser_val)
 
-	app.launch(allowed_paths=["/home/mk99/xtts2-ui/outputs/","/home/mk99/xtts2-ui/temp/"], inbrowser=True, favicon_path="mk99.ico")
+	app.launch(
+		allowed_paths=[out_path, tar_path, temp_path], #["/home/mk99/xtts2-ui/outputs/","/home/mk99/xtts2-ui/temp/"],
+		inbrowser=browser_val,
+		favicon_path="mk99.ico",
+		share=share_val,
+
+	)
 
 
 # REQUIRES FFMPEG

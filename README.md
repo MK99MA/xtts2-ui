@@ -4,7 +4,7 @@ This repository contains the essential code for cloning any voice using just tex
 
 Works in [16 languages](#language-support) and has in-built voice recording/uploading.
 
-## Model 
+## Model
 The model used is `tts_models/multilingual/multi-dataset/xtts_v2`. For more details, refer to [Hugging Face - XTTS-v2](https://huggingface.co/coqui/XTTS-v2) and its specific version [XTTS-v2 Version 2.0.2](https://huggingface.co/coqui/XTTS-v2/tree/v2.0.2).
 
 <h1 align="center">    
@@ -32,7 +32,7 @@ To set up this project, follow these steps in a terminal:
 
     - Clone the repository to your local machine.
       ```bash
-      git clone https://github.com/pbanuru/xtts2-ui.git
+      git clone https://github.com/MK99MA/xtts2-ui.git
       cd xtts2-ui
       ```
 
@@ -48,7 +48,7 @@ To set up this project, follow these steps in a terminal:
        venv\Scripts\activate
        ```
        or
-       
+
        ```bash
        # git bash
        source venv/Scripts/activate
@@ -59,7 +59,7 @@ To set up this project, follow these steps in a terminal:
        ```
 
 3. **Install PyTorch:**
-   
+
    - If you have an Nvidia CUDA-Enabled GPU, choose the appropriate PyTorch installation command:
      - Before installing PyTorch, check your CUDA version by running:
        ```bash
@@ -72,6 +72,10 @@ To set up this project, follow these steps in a terminal:
      - For CUDA 11.8:
        ```bash
        pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+       ```
+     - For CPU:
+       ```bash
+       pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
        ```
    - If you don't have a CUDA-enabled GPU,:
      Follow the instructions on the [PyTorch website](https://pytorch.org/get-started/locally/) to install the appropriate version of PyTorch for your system.
@@ -87,7 +91,7 @@ To set up this project, follow these steps in a terminal:
      ```
 
 
-     
+
 
 After completing these steps, your setup should be complete and you can start using the project.
 
@@ -122,7 +126,7 @@ If your model is re-downloading each run, please consult [Issue 4723 on GitHub](
 ## Target Voices Dataset
 The dataset consists of a single folder named `targets`, pre-populated with several voices for testing purposes.
 
-To add more voices (if you don't want to go through the GUI), create a 24KHz WAV file of approximately 10 seconds and place it under the `targets` folder. 
+To add more voices (if you don't want to go through the GUI), create a 24KHz WAV file of approximately 10 seconds and place it under the `targets` folder.
 You can use yt-dlp to download a voice from YouTube for cloning:
 ```
 yt-dlp -x --audio-format wav "https://www.youtube.com/watch?"
@@ -156,4 +160,4 @@ More details [here](https://github.com/polm/fugashi#installing-a-dictionary).
 
 
 ## Credits
-1. Heavily based on https://github.com/kanttouchthis/text_generation_webui_xtts/ 
+1. Heavily based on https://github.com/kanttouchthis/text_generation_webui_xtts/
