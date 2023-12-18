@@ -56,6 +56,10 @@ else:
 	#AMD GPU and too lazy to add a coded check...
 	device = torch.device('cpu')
 
+###############################################################################
+############################### Generate Voice ################################
+###############################################################################
+
 # Load model
 # Disabled for testing
 #tts = TTS(model_name=params["model_name"]).to(device)
@@ -81,6 +85,10 @@ def gen_voice(string, spk, speed, english):
 		language=languages[english]
 	)
 	return output_file
+
+###############################################################################
+############################# Settings & Config ###############################
+###############################################################################
 
 # Create Configuration
 def createConfig():
@@ -179,6 +187,10 @@ def comp_pw(text, admin_state):
 		admin_state = False
 		return admin_state
 
+###############################################################################
+################################### OUTPUT ####################################
+###############################################################################
+
 # Zip files for download
 def zipped_download(selected_files):
 	with ZipFile("temp/generated_audio.zip","w") as zipObj:
@@ -201,37 +213,61 @@ def get_selected(selected_files):
 	else:
 		return gr.Button(value = "Download", link = "", interactive = False)
 
+
 # Outputs Preview handler
-def playfile(selected_files):
+def playfile(selected_files, radio):
 	if len(selected_files) == 0:
 		return gr.Audio(label="Preview", visible = False)
 	else:
-		file = selected_files[0]
+		if radio == "Multi":
+			file = selected_files[0]
+		else:
+			file = selected_files
+
 		if os.path.exists(file):
 			folder, filename = os.path.split(file)
 			url = "outputs/" + filename
 		else:
 			gr.Warning("File does not exist anymore.\n\nPlease select another file for playback.")
 			return gr.update(visible = False)
-	if len(selected_files) > 1:
-		gr.Info('Please select only 1 file at a time for playback!\n\nOnly the first selected file in list will be available for playback.')
-		return gr.update(value = url, visible = True)
-	else:
-		return gr.update(value = url, visible = True, show_download_button = True, show_share_button = True, format = 'wav')
+
+		if len(selected_files) > 1 and radio == "Multi":
+			gr.Info('Please select only 1 file at a time for playback!\n\nOnly the first selected file in list will be available for playback.')
+			return gr.update(value = url, visible = True)
+		else:
+			return gr.update(value = url, visible = True, show_download_button = True, show_share_button = True, format = 'wav')
+
+
 
 # Output deletion selection handler
 def del_output_sel(selected_files, admin_state):
 	#print(selected_files)
 	if len(selected_files) == 0:
 		#return gr.Button(value = "Delete", interactive = False)
-		return gr.update(interactive = False)
+		return(
+		 	gr.update(visible=True, interactive = False),
+			gr.update(visible=False),
+			gr.update(visible=False),
+			gr.update(visible=False)
+		)
 	else:
 		for file in selected_files:
 			if os.path.exists(file) and admin_state == True:
 				#return gr.Button(value = "Delete", interactive = True)
-				return gr.update(interactive = True)
+				return(
+					gr.update(interactive = True),
+					gr.update(),
+					gr.update(),
+					gr.update()
+				)
+
 			else:
-				return gr.update(interactive = False)
+				return(
+				 	gr.update(visible=True, interactive = False),
+					gr.update(visible=False),
+					gr.update(visible=False),
+					gr.update(visible=False)
+				)
 
 # Delete Button Function
 def del_files(selected_files):
@@ -246,6 +282,7 @@ def del_files(selected_files):
 				gr.update(value = []),
 				#gr.FileExplorer(glob = '*.wav', root="outputs", label="Select files to download", height = 400.0)
 				gr.update(visible=False),
+				gr.update(visible=False),
 				gr.update(visible=False)
 			)
 		if os.path.exists(del_path):
@@ -256,6 +293,7 @@ def del_files(selected_files):
 				#gr.FileExplorer(glob = '*.wav', root="outputs", label="Select files to download", height = 400.0)
 				gr.update(choices=list_dir(), value = []),
 				gr.update(visible=False),
+				gr.update(visible=False),
 				gr.update(visible=False)
 			)
 		else:
@@ -265,6 +303,7 @@ def del_files(selected_files):
 				#gr.Button(value = "Delete", interactive = False),
 				gr.update(value = []),
 				#gr.FileExplorer(glob = '*.wav', root="outputs", label="Select files to download", height = 400.0)
+				gr.update(visible=False),
 				gr.update(visible=False),
 				gr.update(visible=False)
 			)
@@ -285,13 +324,38 @@ def list_dir():
 
 	return list(map(lambda x, y:(x,y), filelist,pathlist))
 
+def radio_select(radio):
+	if radio == "Multi":
+		return(
+			gr.update(multiselect = True),
+			gr.update(interactive = True),
+			gr.update(visible = False)
+		)
+	else:
+		return(
+		 	gr.update(multiselect = False),
+			gr.update(interactive = False),
+			gr.update(visible = False)
+		)
 
-#def loading(progress=gr.Progress()):
-#	sels = [None] * len(file_explorer)
-#	for sel in progress.tqdm(sels, desc="Beschreibung"):
-#		time.sleep(0.1)
-#	return gr.update(label="Updated?")
+# Selection button handler
+def select_all(drop_explorer):
+	pathlist = []
+	fullpath = os.getcwd() + "/outputs/"
+	for path in os.listdir("outputs"):
+		if os.path.isfile(os.path.join("outputs", path)):
+			folder, ext = os.path.splitext(path)
+			if ext == ".wav":
+				pathlist.append(fullpath + path)
 
+	return gr.update(value = pathlist)
+
+def select_none(drop_explorer):
+	return gr.update(value = [])
+
+###############################################################################
+################################### TARGET ####################################
+###############################################################################
 # Targets Preview handler
 def playfile_target(selected_files):
 	if selected_files:
@@ -308,24 +372,6 @@ def playfile_target(selected_files):
 	else:
 		return gr.update(visible = False, value=None)
 
-# Selection button handler
-def update_explorer(drop_explorer):
-	pathlist = []
-	count = 0
-	fullpath = os.getcwd() + "/outputs/"
-	for path in os.listdir("outputs"):
-		if os.path.isfile(os.path.join("outputs", path)):
-			folder, ext = os.path.splitext(path)
-			if ext == ".wav":
-				count += 1
-				pathlist.append(fullpath + path)
-
-	if len(drop_explorer) < count:
-		return gr.update(value = pathlist)
-
-	elif len(drop_explorer) == count or len(drop_explorer) >= 0:
-		# empty list
-		return gr.update(value = [])
 
 # Save currently selected Speaker (dropbox) as default in config
 def set_default_speaker(speaker_dropdown):
@@ -368,8 +414,7 @@ def modify_filename(save_path):
 
 		save_path = f"{folder}/{name}_{count}{ext}"
 		filename = f"{name}_{count}"
-		#print(save_path)
-		#print(filename)
+
 	return save_path, filename
 
 # Handle audio
@@ -401,6 +446,11 @@ def handle_recorded_audio(audio_data, speaker_dropdown, filename_input): # = "us
 	updated_dropdown = update_dropdown(selected_speaker=filename)
 	return updated_dropdown
 
+
+
+###############################################################################
+#################################### MAIN #####################################
+###############################################################################
 createConfig()
 
 # Load the language data
@@ -424,7 +474,6 @@ if os.path.isfile('config.json'):
 		print(f"An error occurred while loading config data: {e}")
 else:
 	print(f"{config_file_path} does not exist.")
-
 
 
 ################################################################################
@@ -542,6 +591,7 @@ with gr.Blocks(mode = "MK99", title = "MK99 - TTS Gen") as app:
 
 		with gr.Row():
 			with gr.Accordion(label="Download Voice", open=False):
+				# CHANGE TO DROPDOWN!!!
 				target_explorer = gr.FileExplorer(
 					glob= '*.wav',
 					root="targets",
@@ -575,23 +625,49 @@ with gr.Blocks(mode = "MK99", title = "MK99 - TTS Gen") as app:
 		)
 
 	with gr.Tab("Outputs"):
-		gr.Markdown("### Output Archive - Download generated files")
+		with gr.Row():
+			with gr.Column(scale=1):
+				gr.Markdown("### Output Archive - Download generated files")
 
 		with gr.Group():
 			with gr.Row():
-				#file_explorer = gr.FileExplorer(glob = '*.wav', root="outputs", label="Select files to download", height = 400.0, interactive = True)
-				drop_explorer = gr.Dropdown(
-					choices=list_dir(),
-					label="Select files to download",
-					interactive = True,
-					filterable=True,
-					multiselect=True
+				gr.Markdown("###    Selection Mode")
+			with gr.Row():
+				gr.Textbox(
+					value = "[Single] - Only one file can be selected, best for playback.\n\n[Multi] - Multiple files can be selected, best for managing.",
+					container = False,
+					lines = 3,
+					interactive = False,
+				)
+			with gr.Row():
+				select_radio = gr.Radio(
+					choices = ["Single", "Multi"],
+					show_label = False,
+					#label = "Selection Mode",
+					#info = "[Single] - Only one file can be selected, best for playback. \n\n [Multi] - Multiple files can be selected, best for managing.",
+					value = "Single"
 				)
 
 			with gr.Row():
-				with gr.Column(scale=0, min_width=150):
+				#file_explorer = gr.FileExplorer(glob = '*.wav', root="outputs", label="Select files to download", height = 400.0, interactive = True)
+				drop_explorer = gr.Dropdown(
+					choices = list_dir(),
+					label = "Select files to download / preview",
+					interactive = True,
+					filterable = True,
+					multiselect = False
+				)
+
+			with gr.Row():
+				with gr.Column(scale=0, min_width=65):
 					selectall_button = gr.Button(
-						value = "(Un-)Select all"
+						value = "🗹",
+						interactive = False
+					)
+
+				with gr.Column(scale=0, min_width=65):
+					selectnone_button = gr.Button(
+						value = "☐"
 					)
 
 				with gr.Column(scale=2):
@@ -600,17 +676,25 @@ with gr.Blocks(mode = "MK99", title = "MK99 - TTS Gen") as app:
 						interactive = False
 					)
 
-				with gr.Column(scale=0, min_width=150):
+				with gr.Column(scale=0, min_width=130):
 					delete_button = gr.Button(
 						value = "🗑️",
 						interactive = False
 					)
-					# LAYOUT!!
+
+			with gr.Row():
+				with gr.Column(scale=2):
+					empty = gr.Markdown(
+						value=" ",
+						visible=False
+					)
+				with gr.Column(scale=0, min_width=65):
 					confirm_button = gr.Button(
 						value = "✔️",
 						variant = "primary",
 						visible = False
 					)
+				with gr.Column(scale=0, min_width=65):
 					cancel_button = gr.Button(
 						value = "❌",
 						visible = False
@@ -624,6 +708,13 @@ with gr.Blocks(mode = "MK99", title = "MK99 - TTS Gen") as app:
 					waveform_options=my_waveform
 				)
 
+		# Handle selection mode
+		select_radio.change(
+			fn=radio_select,
+			inputs=[select_radio],
+			outputs=[drop_explorer, selectall_button, previewfile]
+		)
+
 		# Handle selection for donwload button
 		drop_explorer.change(
 			fn=get_selected,
@@ -634,7 +725,7 @@ with gr.Blocks(mode = "MK99", title = "MK99 - TTS Gen") as app:
 		# Handle selection for Playback
 		drop_explorer.change(
 			fn=playfile,
-			inputs=[drop_explorer],
+			inputs=[drop_explorer, select_radio],
 			outputs=previewfile
 		)
 
@@ -642,7 +733,7 @@ with gr.Blocks(mode = "MK99", title = "MK99 - TTS Gen") as app:
 		drop_explorer.change(
 			fn=del_output_sel,
 			inputs=[drop_explorer, admin_state],
-			outputs=delete_button #HIDE CONFIRM / CANCEL
+			outputs=[delete_button, confirm_button, cancel_button, empty] #HIDE CONFIRM / CANCEL
 		)
 
 #		delete_button.click(
@@ -652,25 +743,31 @@ with gr.Blocks(mode = "MK99", title = "MK99 - TTS Gen") as app:
 #		)
 
 		delete_button.click(
-			fn=lambda :[gr.update(visible=False), gr.update(visible=True), gr.update(visible=True)],
+			fn=lambda :[gr.update(visible=False), gr.update(visible=True), gr.update(visible=True), gr.update(visible=True)],
 			inputs=None,
-			outputs=[delete_button, confirm_button, cancel_button]
+			outputs=[delete_button, confirm_button, cancel_button, empty]
 		)
 
 		confirm_button.click(
 			fn=del_files,
 			inputs=[drop_explorer],
-			outputs=[delete_button, drop_explorer, confirm_button, cancel_button]
+			outputs=[delete_button, drop_explorer, confirm_button, cancel_button, empty]
 		)
 
 		cancel_button.click(
-			fn=lambda :[gr.update(visible=True), gr.update(visible=False), gr.update(visible=False)],
+			fn=lambda :[gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False)],
 			inputs=None,
-			outputs=[delete_button, confirm_button, cancel_button]
+			outputs=[delete_button, confirm_button, cancel_button, empty]
 		)
 
 		selectall_button.click(
-			fn=update_explorer,
+			fn=select_all,
+			inputs = [drop_explorer],
+			outputs=drop_explorer
+		)
+
+		selectnone_button.click(
+			fn=select_none,
 			inputs = [drop_explorer],
 			outputs=drop_explorer
 		)
@@ -685,6 +782,7 @@ with gr.Blocks(mode = "MK99", title = "MK99 - TTS Gen") as app:
 						value=display_json("config.json"),
 						label="Configuration"
 					)
+					# REFRESH BUTTON?
 
 				with gr.Column():
 					gr.Markdown("### Admin Access:")
@@ -718,7 +816,10 @@ with gr.Blocks(mode = "MK99", title = "MK99 - TTS Gen") as app:
 		inputs=[share_check, admin_state],
 		outputs=share_check
 	)
-
+	#ENABLE?
+	# Standard Sprache?
+	# Standard Speed?
+	# CONFIG LESEN!!!!
 #	browser_check.change(
 #		fn=browser_handler,
 #		inputs=[browser_check, admin_state]

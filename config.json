@@ -4,7 +4,6 @@
   "language": "English",
   "speed": "0.8",
   "launch": {
-    "paths": [],
     "browser": false,
     "share": false
   }
