@@ -111,6 +111,29 @@ def createConfig():
 		with open ('config.json', 'w') as jsonfile:
 			jsonfile.write(myJSON)
 
+# Load config values at startup
+def load_config():
+	# Get current dir for allowed paths
+	root_dir = os.getcwd()
+	# Set Output folder
+	out_path = root_dir + "/outputs"
+	# Set Target folder
+	tar_path = root_dir + "/targets"
+	# Set Temp folder
+	temp_path = root_dir + "/temp"
+
+	# Load default values at startup
+	# Get Launch parameters
+	browser_val = get_config_val("launch", "browser")
+	share_val = get_config_val("launch", "share")	
+
+	# Get generation defaults
+	default_speaker_name = get_config_val("default_speaker_name")
+	#language = get_config_val("language")
+	speed = get_config_val("speed")
+	def_struct = get_config_val("def_struct")
+
+
 # Display content of config.json
 def display_json(file_path):
     try:
@@ -834,19 +857,8 @@ with gr.Blocks(mode = "MK99", title = "MK99 - TTS Gen") as app:
 	)
 
 if __name__ == "__main__":
-	# Get current dir
-	root_dir = os.getcwd()
-	# Set Output folder
-	out_path = root_dir + "/outputs"
-	# Set Target folder
-	tar_path = root_dir + "/targets"
-	# Set Temp folder
-	temp_path = root_dir + "/temp"
-
-	# Get Launch parameters
-	browser_val = get_config_val("launch", "browser")
-	share_val = get_config_val("launch", "share")
-
+	load_config()
+	
 	app.launch(
 		allowed_paths=[out_path, tar_path, temp_path], #["/home/mk99/xtts2-ui/outputs/","/home/mk99/xtts2-ui/temp/"],
 		inbrowser=browser_val,
