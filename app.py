@@ -18,6 +18,26 @@ import hashlib
 def is_mac_os():
 	return platform.system() == 'Darwin'
 
+css = """
+.adminbutton {
+	bottom: 0;
+	height: 50%;
+	position: absolute;
+}
+.adminrow {
+	background: var(--block-background-fill);
+	gap:unset;
+}
+.background-basic{
+	background: var(--block-background-fill);
+}
+.headline{
+	text-align: center;
+}
+"""
+
+#var(--neutral-600);
+
 params = {
 	"activate": True,
 	"autoplay": True,
@@ -147,7 +167,7 @@ def display_json(file_path):
 
 # Refresh config.json display
 def refresh_json():
-	return gr.update(display_json("config.json"))
+	return gr.update(value = display_json("config.json"))
 
 # Update config with new value
 def update_config(key, value, subkey=None):
@@ -182,35 +202,55 @@ def get_config_val(key, subkey=None):
 
 	return conf_value
 
+# Share Checkbox
 def share_handler(checkbox, admin_state):
-	if admin_state:
-		if checkbox:
-			update_config("launch", True, "share")
-			gr.Info("Public sharing has been enabled for the next start!")
-		else:
-			update_config("launch", False, "share")
-			gr.Info("Public sharing has been disabled for the next start!")
-
-		return gr.update()
+	if checkbox:
+		update_config("launch", True, "share")
+		gr.Info("Public sharing has been enabled for the next start!")
 	else:
-		gr.Warning("You have to enter the admin password to change this value.")
-		if checkbox:
-			return gr.update(value=False)
-		else:
-			return gr.update(value=True)
+		update_config("launch", False, "share")
+		gr.Info("Public sharing has been disabled for the next start!")
+
+	return gr.update()
+
+# Browser Checkbox
+def browser_handler(checkbox, admin_state):
+	if checkbox:
+		update_config("launch", True, "browser")
+		gr.Info("The browser will automatically open the webinterface after the next start!")
+	else:
+		update_config("launch", False, "browser")
+		gr.Info("The browser won't automatically open the webinterface after the next start!")
+
+	return gr.update()
 
 
 # handle password Box
-def comp_pw(text, admin_state):
+def comp_pw(text, admin_state, *components):
 	#pl34Sed0n'Tabu5eMe
 	password = "91f0660bb9cf2d91875508527cbf46a8"
 	enc_text = text.encode('utf-8')
+	returnlist = []
 	if hashlib.md5(enc_text).hexdigest() == password:
 		admin_state = True
-		return admin_state
+		gr.Info("Password correct! Admin access enabled.")
+		info_text = "### Admin Access **(Active)**:"
+		for component in components:
+			component = gr.update(interactive = True)
+			returnlist.append(component)
 	else:
 		admin_state = False
-		return admin_state
+		gr.Warning("Wrong password! Admin access disabled.")
+		info_text = "### Admin Access **(Inactive)**:"
+		for component in components:
+			component = gr.update(interactive = False)
+			returnlist.append(component)
+	return(
+		gr.update(value = ""),
+		gr.update(value = info_text),
+		admin_state,
+		*returnlist
+	)
 
 ###############################################################################
 ################################### OUTPUT ####################################
@@ -268,7 +308,6 @@ def playfile(selected_files, radio):
 def del_output_sel(selected_files, admin_state):
 	#print(selected_files)
 	if len(selected_files) == 0:
-		#return gr.Button(value = "Delete", interactive = False)
 		return(
 		 	gr.update(visible=True, interactive = False),
 			gr.update(visible=False),
@@ -278,7 +317,6 @@ def del_output_sel(selected_files, admin_state):
 	else:
 		for file in selected_files:
 			if os.path.exists(file) and admin_state == True:
-				#return gr.Button(value = "Delete", interactive = True)
 				return(
 					gr.update(interactive = True),
 					gr.update(),
@@ -303,9 +341,7 @@ def del_files(selected_files):
 		else:
 			return (
 				gr.update(visible=True, interactive = False),
-				#gr.Button(value = "Delete", interactive = False),
 				gr.update(value = []),
-				#gr.FileExplorer(glob = '*.wav', root="outputs", label="Select files to download", height = 400.0)
 				gr.update(visible=False),
 				gr.update(visible=False),
 				gr.update(visible=False)
@@ -313,9 +349,7 @@ def del_files(selected_files):
 		if os.path.exists(del_path):
 			os.remove(del_path)
 			return(
-				#gr.Button(value = "Delete", interactive = False),
 				gr.update(visible=True, interactive = False),
-				#gr.FileExplorer(glob = '*.wav', root="outputs", label="Select files to download", height = 400.0)
 				gr.update(choices=list_dir(), value = []),
 				gr.update(visible=False),
 				gr.update(visible=False),
@@ -325,9 +359,7 @@ def del_files(selected_files):
 			print("The file does not exist: " + del_path)
 			return(
 				gr.update(visible=True, interactive = False),
-				#gr.Button(value = "Delete", interactive = False),
 				gr.update(value = []),
-				#gr.FileExplorer(glob = '*.wav', root="outputs", label="Select files to download", height = 400.0)
 				gr.update(visible=False),
 				gr.update(visible=False),
 				gr.update(visible=False)
@@ -419,24 +451,22 @@ def playfile_target(selected_files):
 # Save currently selected Speaker (dropbox) as default in config
 def set_default_speaker(speaker_dropdown):
 	sel_speaker = speaker_dropdown
-	#print(sel_speaker)
 	update_config('default_speaker_name', sel_speaker)
-	return gr.Dropdown(
+	default_speaker_name = sel_speaker
+	return gr.update(
 		choices=update_speakers(),
-		value=default_speaker_name,
-		label="Select Speaker"
+		value=sel_speaker
 	)
 
 # Delete currently selected Speaker (Dropbox)
-def del_speaker(speaker_dropdown, admin_state):
+def del_speaker(speaker_dropdown):
 	speaker_del = speaker_dropdown
 	del_path = 'targets/' + speaker_del + '.wav'
 	if os.path.exists(del_path):
 		os.remove(del_path)
 		#Refresh Box and set default value
-		return gr.Dropdown(choices=update_speakers(),
-			value=default_speaker_name,
-			label="Select Speaker"
+		return gr.update(choices=update_speakers(),
+			value=default_speaker_name
 		)
 	else:
 		print("The file does not exist: " + del_path)
@@ -448,13 +478,25 @@ def update_speakers():
 
 	speakerlist = sorted(speakerlist, key=str.casefold)
 
-	return speakerlist #list(speakers.keys())
+	return speakerlist
 
 # Create Dropdown
 # update_speakers () = list of voices
 def update_dropdown(_=None, selected_speaker=default_speaker_name):
-	print("upd_drop" + default_speaker_name)
 	return gr.Dropdown(choices=update_speakers(), value=selected_speaker, label="Select Speaker", filterable=True)
+
+# Rename Target filename
+def rename_target(target, newname):
+	old = 'targets/' + target + '.wav'
+	new = 'targets/' + newname + '.wav'
+	if os.path.exists(old):
+		os.rename(old, new)
+		update_config('default_speaker_name', newname)
+
+		return gr.update(
+			choices = update_speakers(),
+			value = newname
+		)
 
 # Target filename Check
 def modify_filename(save_path):
@@ -515,13 +557,13 @@ with open(Path('languages.json'), encoding='utf8') as f:
 
 ################################################################################
 # Gradio Blocks interface
-with gr.Blocks(mode = "MK99", title = "MK99 - TTS Gen") as app:
+with gr.Blocks(mode = "MK99", title = "MK99 - TTS Gen", css = css) as app:
 	gr.Markdown("### TTS based Voice Cloning.")
 	admin_state = gr.State(
 		value=False
 	)
 
-	with gr.Tab("Voice Generation"):
+	with gr.Tab("Voice Generation") as t1:
 		with gr.Row():
 			with gr.Column():
 				text_input = gr.Textbox(
@@ -574,7 +616,7 @@ with gr.Blocks(mode = "MK99", title = "MK99 - TTS Gen") as app:
 			outputs=audio_output
 		)
 
-	with gr.Tab("Voice cloning and management"):
+	with gr.Tab("Voice cloning and management") as t2:
 		gr.Markdown("### Speaker Selection and Voice Cloning")
 
 		with gr.Group():
@@ -590,9 +632,7 @@ with gr.Blocks(mode = "MK99", title = "MK99 - TTS Gen") as app:
 						value = default_speaker_name,
 						label = "Select Speaker",
 						filterable = True
-					)#update_dropdown()
-					print("drop create"  + default_speaker_name)
-					print(speaker_dropdown.value)
+					)
 
 			with gr.Row():
 				with gr.Column(scale = 1, min_width = 200):
@@ -645,46 +685,56 @@ with gr.Blocks(mode = "MK99", title = "MK99 - TTS Gen") as app:
 						interactive=False
 					)
 
+		# Handle default speaker button ADMIN ACCESS
 		default_speaker_button.click(
 			fn=set_default_speaker,
 			inputs=[speaker_dropdown], #vars,
 			outputs=speaker_dropdown
 		)
 
+		# Handle delete voice button ADMIN ACCESS
 		delete_speaker_button.click(
 			fn=del_speaker, #function,
-			inputs=[speaker_dropdown, admin_state], #vars,
+			inputs=[speaker_dropdown], #vars,
 			outputs=speaker_dropdown
-		) #gradio_component to use)
+		)
 
+		# Handle refresh button (inactive)
 #		refresh_button.click(
 #			fn=update_dropdown,
 #			inputs=[],
 #			outputs=speaker_dropdown
 #		)
 
+		# Handle rename button ADMIN ACCESS TODO
 		rename_button.click(
-			print("Click")
+			fn=rename_target,
+			inputs=[speaker_dropdown, rename_box],
+			outputs=[speaker_dropdown]
 		)
 
+		# Handle save recording button
 		save_button.click(
 			fn=handle_recorded_audio,
 			inputs=[record_button, speaker_dropdown, filename_input],
 			outputs=speaker_dropdown
 		)
 
+		# Handle stop recording button
 		record_button.stop_recording(
 			fn=handle_recorded_audio,
 			inputs=[record_button, speaker_dropdown, filename_input],
 			outputs=speaker_dropdown
 		)
 
+		# Handle upload record button
 		record_button.upload(
 			fn=handle_recorded_audio,
 			inputs=[record_button, speaker_dropdown, filename_input],
 			outputs=speaker_dropdown
 		)
 
+		# Handle Preview dropdown list
 		target_drop.change(
 			fn=playfile_target,
 			inputs=[target_drop],
@@ -692,20 +742,20 @@ with gr.Blocks(mode = "MK99", title = "MK99 - TTS Gen") as app:
 			queue = False
 		)
 
-	with gr.Tab("Outputs"):
+	with gr.Tab("Outputs") as t3:
 		with gr.Row():
 			with gr.Column(scale=1):
 				gr.Markdown("### Output Archive - Download generated files")
 
 		with gr.Group():
 			with gr.Row():
-				gr.Markdown("###    Selection Mode")
+				gr.Markdown(value = "###    Selection Mode", elem_classes = "headline")
 			with gr.Row():
 				gr.Textbox(
 					value = "[Single] - Only one file can be selected, best for playback.\n\n[Multi] - Multiple files can be selected, best for managing.",
 					container = False,
 					lines = 3,
-					interactive = False,
+					interactive = False
 				)
 			with gr.Row():
 				select_radio = gr.Radio(
@@ -801,47 +851,46 @@ with gr.Blocks(mode = "MK99", title = "MK99 - TTS Gen") as app:
 			outputs=[delete_button, confirm_button, cancel_button, empty] #HIDE CONFIRM / CANCEL
 		)
 
-#		delete_button.click(
-#			fn=del_files,
-#			inputs=[drop_explorer],
-#			outputs=[delete_button, drop_explorer]
-#		)
-
+		# Handle delete button - shows confirmation buttons
 		delete_button.click(
 			fn=lambda :[gr.update(visible=False), gr.update(visible=True), gr.update(visible=True), gr.update(visible=True)],
 			inputs=None,
 			outputs=[delete_button, confirm_button, cancel_button, empty]
 		)
 
+		# Handle confirm button for deletion
 		confirm_button.click(
 			fn=del_files,
 			inputs=[drop_explorer],
 			outputs=[delete_button, drop_explorer, confirm_button, cancel_button, empty]
 		)
 
+		# Handle cancel button for deletion
 		cancel_button.click(
 			fn=lambda :[gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False)],
 			inputs=None,
 			outputs=[delete_button, confirm_button, cancel_button, empty]
 		)
 
+		# Handle select all button
 		selectall_button.click(
 			fn=select_all,
 			inputs = [drop_explorer],
 			outputs=drop_explorer
 		)
 
+		# Handle select none button
 		selectnone_button.click(
 			fn=select_none,
 			inputs = [drop_explorer],
 			outputs=drop_explorer
 		)
 
-	with gr.Tab("Settings"):
+	with gr.Tab("Settings") as t4:
 		with gr.Row(equal_height=True):
 			with gr.Column():
 				with gr.Group():
-					gr.Markdown("### Saved Configurations:")
+					gr.Markdown(value = "### Saved Configurations:", elem_classes = "headline")
 					json_comp = gr.JSON(
 						value=display_json("config.json"),
 						label="Configuration"
@@ -852,16 +901,21 @@ with gr.Blocks(mode = "MK99", title = "MK99 - TTS Gen") as app:
 
 			with gr.Column():
 				with gr.Group():
-					gr.Markdown("### Admin Access:")
-					pw_text = gr.Textbox(
-						label="Admin password",
-						placeholder="Enter the password...",
-						type="password",
-						autofocus=True,
-						info="Entering the correct password will enable the use of certain buttons in the other tabs."
-					)
-
-					#FUNCTIONS!
+					status = gr.Markdown(value = "### Admin Access **(Inactive)**:", elem_classes = "headline")
+					with gr.Row():
+						with gr.Column():
+							pw_text = gr.Textbox(
+								label="Admin password",
+								placeholder="Enter the password...",
+								type="password",
+								autofocus=True,
+								info="Entering the correct password will enable all blocked components."
+							)
+						with gr.Column(elem_classes="adminrow"):
+							apply_btn = gr.Button(
+								value = "Apply",
+								elem_classes="adminbutton"
+							)
 					with gr.Row():
 						def_lang_drop = gr.Dropdown(
 							interactive = False
@@ -873,43 +927,52 @@ with gr.Blocks(mode = "MK99", title = "MK99 - TTS Gen") as app:
 						share_check = gr.Checkbox(
 							label="Create public link?",
 							info="Enable to activate app sharing at launch (Requires restart)",
-							interactive = False
+							interactive = False,
+							value = share_val
 						)
 						browser_check = gr.Checkbox(
 							label="Open Browser?",
 							info="Enable to automatically open the browser at start. (Requires restart)",
-							interactive = False
+							interactive = False,
+							value = browser_val
 						)
 
-	pw_text.input(
+	# Enable locked buttons if password is correct
+	apply_btn.click(
 		fn=comp_pw,
-		inputs=[pw_text,admin_state],
-		outputs=admin_state,
+		inputs=[pw_text, admin_state, def_lang_drop, def_speed_slide, share_check, browser_check, default_speaker_button, rename_button, rename_box, delete_speaker_button],
+		outputs=[pw_text, status, admin_state, def_lang_drop, def_speed_slide, share_check, browser_check, default_speaker_button, rename_button, rename_box, delete_speaker_button],
 		show_progress="hidden"
 	)
 
-# ENABLE ALL THE STUFF!!
+	# Handle share checkbox selection ADMIN ACCESS
 	share_check.change(
 		fn=share_handler,
 		inputs=[share_check, admin_state],
 		outputs=share_check
 	)
-	#ENABLE?
-	# Standard Sprache?
-	# Standard Speed?
-	# CONFIG LESEN!!!!
-#	browser_check.change(
-#		fn=browser_handler,
-#		inputs=[browser_check, admin_state]
-#	)
 
+	# Handle browser checkbox selection ADMIN ACCESS
+	browser_check.change(
+		fn=browser_handler,
+		inputs=[browser_check, admin_state],
+		outputs=[browser_check]
+	)
 
-####
-	json_comp.change(
+	# Handle json refresh button
+	refreshjson.click(
 		fn=refresh_json,
 		inputs=[],
 		outputs=json_comp
 	)
+
+	# Refresh JSON on selecting Tab
+	t4.select(
+		fn=refresh_json,
+		inputs=[],
+		outputs=json_comp
+	)
+
 
 if __name__ == "__main__":
 

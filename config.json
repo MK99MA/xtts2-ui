@@ -1,5 +1,5 @@
 {
-  "default_speaker_name": "Benjamin_Test",
+  "default_speaker_name": "Test",
   "def_struct": "spk + string_ul",
   "language": "English",
   "speed": "0.8",
