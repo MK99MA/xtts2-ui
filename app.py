@@ -19,25 +19,58 @@ def is_mac_os():
 	return platform.system() == 'Darwin'
 
 css = """
+.token {
+	height: 27.5px !important;
+}
+.wrap-inner {
+	gap: 3px !important;
+}
+.remove-all {
+	margin-left: unset !important;
+}
+.icon-wrap {
+	margin-right: unset !important;
+}
 .adminbutton {
 	bottom: 0;
 	height: 50%;
 	position: absolute;
 }
+.empty {
+	background: var(--block-background-fill);
+}
+.button_75 {
+	height: 75%;
+}
+.row_75 {
+	height: 30px;
+	gap: unset;
+}
+.vert_button {
+	height: 60px;
+}
 .adminrow {
 	background: var(--block-background-fill);
 	gap:unset;
 }
-.background-basic{
+.vert_bar {
+	background: var(--body-background-fill);
+	gap: 10px;
+}
+.background-basic {
 	background: var(--block-background-fill);
 }
-.headline{
+.headline {
 	text-align: center;
 }
 """
 
+#--button-secondary-background-fill
 #var(--neutral-600);
+#--border-color-primary
 
+
+# https://docs.coqui.ai/en/latest/models/xtts.html#inference-parameters
 params = {
 	"activate": True,
 	"autoplay": True,
@@ -48,6 +81,11 @@ params = {
 	"model_name": "tts_models/multilingual/multi-dataset/xtts_v2",
 }
 
+#Custom string
+#filename Setting
+#filename duplicate name handling
+# DOWNLOAD in VOICE GEN!!
+
 
 # SUPPORTED_FORMATS = ['wav', 'mp3', 'flac', 'ogg']
 SAMPLE_RATE = 16000
@@ -55,7 +93,7 @@ device = None
 
 # Set the default speaker name
 default_speaker_name = "Rogger"
-def_struct = 'spk + string_ul'
+def_struct = ["Speaker", "Text"]
 fl_name = ''#'outputs/' + def_struct + '.wav'
 output_file = Path(fl_name)
 my_waveform = {
@@ -81,12 +119,21 @@ else:
 
 # Load model
 # Disabled for testing
-#tts = TTS(model_name=params["model_name"]).to(device)
+tts = TTS(model_name=params["model_name"]).to(device)
 
 # # Random sentence (assuming harvard_sentences.txt is in the correct path)
 # def random_sentence():
 #	 with open(Path("harvard_sentences.txt")) as f:
 #		 return random.choice(list(f))
+
+# toggle cancel button
+def handle_cancel():
+	return gr.update(interactive = False)
+	# Change when Abortfunction stops the actual Generation True)
+
+def block_cancel():
+	gr.Warning("Generation was aborted.")
+	return gr.update(interactive = False)
 
 # Voice generation function
 def gen_voice(string, spk, speed, english):
@@ -103,7 +150,25 @@ def gen_voice(string, spk, speed, english):
 		speaker_wav=[f"{this_dir}/targets/" +spk + ".wav"],
 		language=languages[english]
 	)
-	return output_file
+	# CHECK IF EXISTS CREATE WITH (n)
+	return(
+		output_file,
+		gr.update(interactive = False)
+	)
+
+# restore defaults
+def reload_defaults():
+	default_speaker_name = get_config_val("default_speaker_name")
+	language = get_config_val("language")
+	def_speed = get_config_val("speed")
+	def_struct = get_config_val("def_structure")
+	return(
+		def_speed,
+		default_speaker_name,
+		language,
+		def_struct
+	)
+
 
 ###############################################################################
 ############################# Settings & Config ###############################
@@ -141,8 +206,8 @@ def loadConfig():
 	favicon = get_config_val("launch", "favicon")
 	default_speaker_name = get_config_val("default_speaker_name")
 	language = get_config_val("language")
-	speed = get_config_val("speed")
-	def_struct = get_config_val("def_struct")
+	def_speed = get_config_val("speed")
+	def_struct = get_config_val("def_structure")
 
 	return(
 		out_path,
@@ -152,8 +217,9 @@ def loadConfig():
 		share_val,
 		favicon,
 		default_speaker_name,
-		speed,
-		def_struct
+		def_speed,
+		def_struct,
+		language
 	)
 
 # Display content of config.json
@@ -252,6 +318,43 @@ def comp_pw(text, admin_state, *components):
 		*returnlist
 	)
 
+def set_default_lang(lang_drop_val):
+	update_config('language', lang_drop_val)
+	language = lang_drop_val
+	return(
+		gr.update(
+			value = language
+		),
+		gr.update(
+			value = language
+		)
+	)
+
+def set_default_structure(structure):
+	update_config('def_structure', structure)
+	def_struct = structure
+	return(
+		gr.update(
+			value = structure
+		),
+		gr.update(
+			value = structure
+		)
+	)
+
+def set_default_speed(speed_slide_val):
+	update_config('speed', speed_slide_val)
+	speed = speed_slide_val
+	return(
+		gr.update(
+			value = speed
+		),
+		gr.update(
+			value = speed
+		)
+	)
+
+
 ###############################################################################
 ################################### OUTPUT ####################################
 ###############################################################################
@@ -263,107 +366,115 @@ def zipped_download(selected_files):
 			if os.path.exists(file_path):
 				zipObj.write(file_path, arcname=os.path.basename(file_path))
 			else:
+				print("none ?!")
 				return None
 	url = "/file=temp/" + "generated_audio.zip"
 	return url #"tmp.zip"
 
+def single_download(selected_file):
+	if os.path.exists(selected_file):
+		folder, filename = os.path.split(selected_file)
+		url = "file=outputs/" + filename
+	else:
+		return None
+
+	return url
+
 # Download handler
-def get_selected(selected_files):
-	if len(selected_files) >= 1:
-		download_link = zipped_download(selected_files)
+def get_selected(selected_files, radio):
+	if selected_files != None:
+		if (radio == "Single"):
+			download_link = single_download(selected_files)
+		else:
+			if len(selected_files) >= 1:
+				download_link = zipped_download(selected_files)
+			else:
+				return gr.update(link = "", interactive = False)
+
 		if download_link == None:
 			return gr.update(interactive=False)
 		else:
-			return gr.Button(value = "Download", link = download_link, interactive = True)
+			return gr.update(link = download_link, interactive = True)
 	else:
-		return gr.Button(value = "Download", link = "", interactive = False)
-
+		return gr.update(link = "", interactive = False)
 
 # Outputs Preview handler
 def playfile(selected_files, radio):
-	if len(selected_files) == 0:
-		return gr.Audio(label="Preview", visible = False)
+	if selected_files != None:
+		if len(selected_files) == 0:
+			return gr.Audio(label="Preview", visible = False)
+		else:
+			if radio == "Multi":
+				file = selected_files[0]
+			else:
+				file = selected_files
+
+			if os.path.exists(file):
+				folder, filename = os.path.split(file)
+				url = "outputs/" + filename
+			else:
+				gr.Warning("File does not exist anymore.\n\nPlease select another file for playback.")
+				return gr.update(visible = False)
+
+			if len(selected_files) > 1 and radio == "Multi":
+				gr.Info('Please select only 1 file at a time for playback!\n\nOnly the first selected file in list will be available for playback.')
+				return gr.update(value = url, visible = True)
+			else:
+				return gr.update(value = url, visible = True, show_download_button = True, show_share_button = True, format = 'wav')
 	else:
-		if radio == "Multi":
-			file = selected_files[0]
-		else:
-			file = selected_files
-
-		if os.path.exists(file):
-			folder, filename = os.path.split(file)
-			url = "outputs/" + filename
-		else:
-			gr.Warning("File does not exist anymore.\n\nPlease select another file for playback.")
-			return gr.update(visible = False)
-
-		if len(selected_files) > 1 and radio == "Multi":
-			gr.Info('Please select only 1 file at a time for playback!\n\nOnly the first selected file in list will be available for playback.')
-			return gr.update(value = url, visible = True)
-		else:
-			return gr.update(value = url, visible = True, show_download_button = True, show_share_button = True, format = 'wav')
-
+		return gr.Audio(label="Preview", visible = False)
 
 
 # Output deletion selection handler
 def del_output_sel(selected_files, admin_state):
 	#print(selected_files)
-	if len(selected_files) == 0:
-		return(
-		 	gr.update(visible=True, interactive = False),
-			gr.update(visible=False),
-			gr.update(visible=False),
-			gr.update(visible=False)
-		)
-	else:
-		for file in selected_files:
-			if os.path.exists(file) and admin_state == True:
-				return(
-					gr.update(interactive = True),
-					gr.update(),
-					gr.update(),
-					gr.update()
-				)
+	if selected_files != None:
+		if len(selected_files) > 0:
+			for file in selected_files:
+				if os.path.exists(file) and admin_state == True:
+					return(
+						gr.update(interactive = True),
+						gr.update(),
+						gr.update()
+					)
 
-			else:
-				return(
-				 	gr.update(visible=True, interactive = False),
-					gr.update(visible=False),
-					gr.update(visible=False),
-					gr.update(visible=False)
-				)
+	return(
+	 	gr.update(visible=True, interactive = False),
+		gr.update(visible=False),
+		gr.update(visible=False)
+	)
 
 # Delete Button Function
 def del_files(selected_files):
-	for file in selected_files:
-		if os.path.exists(file):
-			folder, filename = os.path.split(file)
+	delete_list = []
+	if isinstance(selected_files, str):
+		if os.path.exists(selected_files):
+			folder, filename = os.path.split(selected_files)
 			del_path = 'outputs/' + filename
-		else:
-			return (
-				gr.update(visible=True, interactive = False),
-				gr.update(value = []),
-				gr.update(visible=False),
-				gr.update(visible=False),
-				gr.update(visible=False)
-			)
+
+	else:
+		for file in selected_files:
+			if os.path.exists(file):
+				folder, filename = os.path.split(file)
+				del_path = 'outputs/' + filename
+				delete_list.append(del_path)
+
+	if isinstance(selected_files, str):
 		if os.path.exists(del_path):
 			os.remove(del_path)
-			return(
-				gr.update(visible=True, interactive = False),
-				gr.update(choices=list_dir(), value = []),
-				gr.update(visible=False),
-				gr.update(visible=False),
-				gr.update(visible=False)
-			)
-		else:
-			print("The file does not exist: " + del_path)
-			return(
-				gr.update(visible=True, interactive = False),
-				gr.update(value = []),
-				gr.update(visible=False),
-				gr.update(visible=False),
-				gr.update(visible=False)
-			)
+		sel_value = None
+	else:
+		for path in delete_list:
+			if os.path.exists(path):
+				os.remove(path)
+		sel_value = []
+
+	return(
+		gr.update(visible=True, interactive = False),
+		gr.update(choices=list_dir_out(), value = sel_value),
+		gr.update(visible=False),
+		gr.update(visible=False)
+	)
 
 def list_dir_out():
 	pathlist = []
@@ -380,6 +491,9 @@ def list_dir_out():
 			filelist = sorted(filelist, key=str.casefold)
 
 	return list(map(lambda x, y:(x,y), filelist,pathlist))
+
+def reload_outputs():
+	return gr.update(choices = list_dir_out())
 
 
 def radio_select(radio):
@@ -453,9 +567,15 @@ def set_default_speaker(speaker_dropdown):
 	sel_speaker = speaker_dropdown
 	update_config('default_speaker_name', sel_speaker)
 	default_speaker_name = sel_speaker
-	return gr.update(
-		choices=update_speakers(),
-		value=sel_speaker
+	return(
+		gr.update(
+			choices = update_speakers(),
+			value = sel_speaker
+		),
+		gr.update(
+			choices = update_speakers(),
+			value = sel_speaker
+		)
 	)
 
 # Delete currently selected Speaker (Dropbox)
@@ -464,12 +584,18 @@ def del_speaker(speaker_dropdown):
 	del_path = 'targets/' + speaker_del + '.wav'
 	if os.path.exists(del_path):
 		os.remove(del_path)
-		#Refresh Box and set default value
-		return gr.update(choices=update_speakers(),
-			value=default_speaker_name
-		)
 	else:
 		print("The file does not exist: " + del_path)
+
+	#Refresh Box and set default value
+	return(
+		gr.update(choices=update_speakers(),
+			value=default_speaker_name
+		),
+		gr.update(visible = True),
+		gr.update(visible = False),
+		gr.update(visible = False)
+	)
 
 # Get files in directory /targets
 def update_speakers():
@@ -487,15 +613,22 @@ def update_dropdown(_=None, selected_speaker=default_speaker_name):
 
 # Rename Target filename
 def rename_target(target, newname):
+	if newname =="":
+		newname = "unnamed"
 	old = 'targets/' + target + '.wav'
 	new = 'targets/' + newname + '.wav'
 	if os.path.exists(old):
 		os.rename(old, new)
 		update_config('default_speaker_name', newname)
 
-		return gr.update(
-			choices = update_speakers(),
-			value = newname
+		return(
+			gr.update(
+				choices = update_speakers(),
+				value = newname
+				),
+			gr.update(
+				choices = update_speakers()
+			)
 		)
 
 # Target filename Check
@@ -549,11 +682,13 @@ def handle_recorded_audio(audio_data, speaker_dropdown, filename_input): # = "us
 #################################### MAIN #####################################
 ###############################################################################
 createConfig()
-out_path, tar_path, temp_path, browser_val, share_val, favicon, default_speaker_name, speed, def_struct = loadConfig()
+out_path, tar_path, temp_path, browser_val, share_val, favicon, default_speaker_name, speed, def_struct, language = loadConfig()
 
 # Load the language data
 with open(Path('languages.json'), encoding='utf8') as f:
 	languages = json.load(f)
+
+struct_list = ["Speaker", "UUID", "Language", "Speed", "Text", "Custom"] # Text = string_ul
 
 ################################################################################
 # Gradio Blocks interface
@@ -565,55 +700,122 @@ with gr.Blocks(mode = "MK99", title = "MK99 - TTS Gen", css = css) as app:
 
 	with gr.Tab("Voice Generation") as t1:
 		with gr.Row():
-			with gr.Column():
-				text_input = gr.Textbox(
-					lines=2,
-					label="Speechify this Text",
-					value="Even in the darkest nights, a single spark of hope can ignite the fire of determination within us, guiding us towards a future we dare to dream."
-				)
-				speed_slider = gr.Slider(
-					label='Speed',
-					minimum=0.1,
-					maximum=1.99,
-					value=0.8,
-					step=0.01
-				)
-				with gr.Row():
-					with gr.Column():
-						#SYNC!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-						speaker_dropdown = update_dropdown()
-					with gr.Column():
-						language_dropdown = gr.Dropdown(list(languages.keys()), label="Language/Accent", value="English")
+			with gr.Column(scale=1):
+				with gr.Group():
+					with gr.Row():
+						with gr.Column(scale=2):
+							text_input = gr.Textbox(
+								lines=2,
+								label="Speechify this Text",
+								value="Even in the darkest nights, a single spark of hope can ignite the fire of determination within us, guiding us towards a future we dare to dream."
+							)
 
-				submit_button = gr.Button("Convert")
-################## TODO: Clear Button?
-				#CANCELBUTTON FÜR RAPHAEL
-			with gr.Column():
-				audio_output = gr.Audio()
+					with gr.Row():
+						with gr.Column(scale=2):
+							speed_slider = gr.Slider(
+								label = 'Speed',
+								minimum = 0.1,
+								maximum = 1.99,
+								value = speed, # 0.8,
+								step = 0.01
+							)
 
-				with gr.Row():
-					# Column for filename structure
-					with gr.Column():
-#########################TODO
-						filename_struct = gr.Textbox(
-							label="Filename structure",
-							value = fl_name
+					with gr.Row():
+						with gr.Column():
+							gen_speaker_dropdown = gr.Dropdown(
+								choices = update_speakers(),
+								value = default_speaker_name,
+								label = "Select Speaker",
+								filterable = True
+							)#update_dropdown()
+						with gr.Column():
+							language_dropdown = gr.Dropdown(
+								list(languages.keys()),
+								label = "Language/Accent",
+								value = language #"English"
+							)
+
+			with gr.Column(scale=0, min_width=75):
+				with gr.Group():
+					with gr.Column(elem_classes="vert_bar"):
+						cleargen_button = gr.ClearButton(
+							components = [text_input],
+							value = "Clear Text",
+							elem_classes = "vert_button"
 						)
-					with gr.Column():
-#########################TODO
-						download_input = gr.Textbox(
-							label="Overwrite filename",
-							placeholder="Enter a custom name for the generated audio"
+						submit_button = gr.Button(
+							value = "Generate Voice",
+							elem_classes = "vert_button"
 						)
-				with gr.Row():
-#####################TODO
-					# Download Button
-					download_button = gr.Button("Download", link = output_file)
+						# TODO
+						cancel_gen_button = gr.Button(
+							value = "Abort Process",
+							elem_classes = "vert_button",
+							interactive = False
+						)
+						reload_def = gr.Button(
+							value = "Restore Defaults",
+							elem_classes = "vert_button"
+						)
+
+			with gr.Column(scale=1):
+				with gr.Group():
+					with gr.Row():
+						audio_output = gr.Audio()
+
+					with gr.Row(elem_classes = "row_75"):
+						with gr.Column(scale = 1, min_width = 50):
+							download_button = gr.Button(
+								value = "Download",
+								icon = "dl.ico",
+								link = output_file,
+								elem_classes = "button_75"
+							)
+
+					with gr.Row():
+						# Column for filename structure
+						with gr.Column(scale=1, min_width = 150):
+							filename_struct = gr.Dropdown(
+								label = "Filename structure",
+								info = "Select up to 3 elements to be used in the filename.",
+								choices = struct_list,
+								multiselect = True,
+								filterable = True,
+								value = def_struct,
+								max_choices = 3,
+								interactive = True
+							)
+						with gr.Column(scale = 0, min_width = 275):
+	#########################TODO
+							custom_input = gr.Textbox(
+								label = "Custom String",
+								info = "Requires 'Custom' in structure!",
+								placeholder = "Enter a custom value"
+							)
+
+		submit_click = submit_button.click(
+			fn=gen_voice,
+			inputs=[text_input, gen_speaker_dropdown, speed_slider, language_dropdown],
+			outputs=[audio_output, cancel_gen_button]
+		)
 
 		submit_button.click(
-			fn=gen_voice,
-			inputs=[text_input, speaker_dropdown, speed_slider, language_dropdown],
-			outputs=audio_output
+			fn=handle_cancel,
+			inputs=[],
+			outputs=[cancel_gen_button]
+		)
+
+		cancel_gen_button.click(
+			fn=block_cancel,
+			inputs=[],
+			outputs=[cancel_gen_button],
+			cancels=[submit_click]
+		)
+
+		reload_def.click(
+			fn=reload_defaults,
+			inputs=[],
+			outputs=[speed_slider, gen_speaker_dropdown, language_dropdown, filename_struct]
 		)
 
 	with gr.Tab("Voice cloning and management") as t2:
@@ -658,11 +860,25 @@ with gr.Blocks(mode = "MK99", title = "MK99 - TTS Gen", css = css) as app:
 						placeholder = "New name"
 					)
 				with gr.Column(scale = 1, min_width = 200):
-					#Delete selected Speaker
-					delete_speaker_button = gr.Button(
-						value = "🗑️ Delete speaker",
-						interactive = False
-					)
+					with gr.Row():
+						with gr.Column(scale=1, min_width = 200):
+							#Delete selected Speaker
+							delete_speaker_button = gr.Button(
+								value = "🗑️ Delete speaker",
+								interactive = False
+							)
+						with gr.Column(scale=1, min_width = 100):
+							tar_confirm_button = gr.Button(
+								value = "✔️",
+								variant = "primary",
+								visible = False
+							)
+						with gr.Column(scale=1, min_width = 100):
+							tar_cancel_button = gr.Button(
+								value = "❌",
+								visible = False
+							)
+					#ADD CONFIRMATION
 
 		with gr.Row():
 			record_button = gr.Audio(
@@ -689,14 +905,34 @@ with gr.Blocks(mode = "MK99", title = "MK99 - TTS Gen", css = css) as app:
 		default_speaker_button.click(
 			fn=set_default_speaker,
 			inputs=[speaker_dropdown], #vars,
-			outputs=speaker_dropdown
+			outputs=[speaker_dropdown, gen_speaker_dropdown]
 		)
 
 		# Handle delete voice button ADMIN ACCESS
+#		delete_speaker_button.click(
+#			fn=del_speaker, #function,
+#			inputs=[speaker_dropdown], #vars,
+#			outputs=speaker_dropdown
+#		)
+
 		delete_speaker_button.click(
-			fn=del_speaker, #function,
-			inputs=[speaker_dropdown], #vars,
-			outputs=speaker_dropdown
+			fn=lambda :[gr.update(visible=False), gr.update(visible=True), gr.update(visible=True)],
+			inputs=None,
+			outputs=[delete_speaker_button, tar_confirm_button, tar_cancel_button]
+		)
+
+		# Handle confirm button for deletion
+		tar_confirm_button.click(
+			fn=del_speaker,
+			inputs=[speaker_dropdown],
+			outputs=[speaker_dropdown, delete_speaker_button, tar_confirm_button, tar_cancel_button]
+		)
+
+		# Handle cancel button for deletion
+		tar_cancel_button.click(
+			fn=lambda :[gr.update(visible=True), gr.update(visible=False), gr.update(visible=False)],
+			inputs=None,
+			outputs=[delete_speaker_button, tar_confirm_button, tar_cancel_button]
 		)
 
 		# Handle refresh button (inactive)
@@ -710,7 +946,7 @@ with gr.Blocks(mode = "MK99", title = "MK99 - TTS Gen", css = css) as app:
 		rename_button.click(
 			fn=rename_target,
 			inputs=[speaker_dropdown, rename_box],
-			outputs=[speaker_dropdown]
+			outputs=[speaker_dropdown, gen_speaker_dropdown]
 		)
 
 		# Handle save recording button
@@ -791,29 +1027,24 @@ with gr.Blocks(mode = "MK99", title = "MK99 - TTS Gen", css = css) as app:
 						interactive = False
 					)
 
-				with gr.Column(scale=0, min_width=130):
-					delete_button = gr.Button(
-						value = "🗑️",
-						interactive = False
-					)
-
-			with gr.Row():
-				with gr.Column(scale=2):
-					empty = gr.Markdown(
-						value=" ",
-						visible=False
-					)
-				with gr.Column(scale=0, min_width=65):
-					confirm_button = gr.Button(
-						value = "✔️",
-						variant = "primary",
-						visible = False
-					)
-				with gr.Column(scale=0, min_width=65):
-					cancel_button = gr.Button(
-						value = "❌",
-						visible = False
-					)
+				with gr.Column(scale = 0, min_width = 130):
+					with gr.Row():
+						with gr.Column(scale = 1, min_width = 130):
+							delete_button = gr.Button(
+								value = "🗑️",
+								interactive = False
+							)
+						with gr.Column(scale=0, min_width=64.5):
+							confirm_button = gr.Button(
+								value = "✔️",
+								variant = "primary",
+								visible = False
+							)
+						with gr.Column(scale=0, min_width=64.5):
+							cancel_button = gr.Button(
+								value = "❌",
+								visible = False
+							)
 
 			with gr.Row():
 				previewfile = gr.Audio(
@@ -822,6 +1053,13 @@ with gr.Blocks(mode = "MK99", title = "MK99 - TTS Gen", css = css) as app:
 					interactive = False,
 					waveform_options = my_waveform
 				)
+
+		# Update Dropdown on tab selected
+		t3.select(
+			fn=reload_outputs,
+			inputs=[],
+			outputs=drop_explorer
+		)
 
 		# Handle selection mode
 		select_radio.change(
@@ -833,7 +1071,7 @@ with gr.Blocks(mode = "MK99", title = "MK99 - TTS Gen", css = css) as app:
 		# Handle selection for donwload button
 		drop_explorer.change(
 			fn=get_selected,
-			inputs=[drop_explorer],
+			inputs=[drop_explorer, select_radio],
 			outputs=download_button
 		)
 
@@ -848,28 +1086,28 @@ with gr.Blocks(mode = "MK99", title = "MK99 - TTS Gen", css = css) as app:
 		drop_explorer.change(
 			fn=del_output_sel,
 			inputs=[drop_explorer, admin_state],
-			outputs=[delete_button, confirm_button, cancel_button, empty] #HIDE CONFIRM / CANCEL
+			outputs=[delete_button, confirm_button, cancel_button] #HIDE CONFIRM / CANCEL
 		)
 
 		# Handle delete button - shows confirmation buttons
 		delete_button.click(
-			fn=lambda :[gr.update(visible=False), gr.update(visible=True), gr.update(visible=True), gr.update(visible=True)],
+			fn=lambda :[gr.update(visible=False), gr.update(visible=True), gr.update(visible=True)],
 			inputs=None,
-			outputs=[delete_button, confirm_button, cancel_button, empty]
+			outputs=[delete_button, confirm_button, cancel_button]
 		)
 
 		# Handle confirm button for deletion
 		confirm_button.click(
 			fn=del_files,
 			inputs=[drop_explorer],
-			outputs=[delete_button, drop_explorer, confirm_button, cancel_button, empty]
+			outputs=[delete_button, drop_explorer, confirm_button, cancel_button]
 		)
 
 		# Handle cancel button for deletion
 		cancel_button.click(
-			fn=lambda :[gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False)],
+			fn=lambda :[gr.update(visible=True), gr.update(visible=False), gr.update(visible=False)],
 			inputs=None,
-			outputs=[delete_button, confirm_button, cancel_button, empty]
+			outputs=[delete_button, confirm_button, cancel_button]
 		)
 
 		# Handle select all button
@@ -888,7 +1126,7 @@ with gr.Blocks(mode = "MK99", title = "MK99 - TTS Gen", css = css) as app:
 
 	with gr.Tab("Settings") as t4:
 		with gr.Row(equal_height=True):
-			with gr.Column():
+			with gr.Column(scale=1):
 				with gr.Group():
 					gr.Markdown(value = "### Saved Configurations:", elem_classes = "headline")
 					json_comp = gr.JSON(
@@ -899,50 +1137,124 @@ with gr.Blocks(mode = "MK99", title = "MK99 - TTS Gen", css = css) as app:
 						value="Refresh JSON"
 					)
 
-			with gr.Column():
+			#with gr.Column(scale=1):
+			#	with gr.Group():
+			#		gr.Markdown(value = "### Enable Admin Access:", elem_classes = "headline")
+			#		with gr.Column():
+			#			pw_text = gr.Textbox(
+			#				label="Admin password",
+			#				placeholder="Enter the password...",
+			#				type="password",
+			#				autofocus=True,
+			#				info="Entering the correct password will enable all blocked components."
+			#			)
+			#		with gr.Column(elem_classes="adminrow"):
+			#			apply_btn = gr.Button(
+			#				value = "Apply"
+			#			)
+
+			with gr.Column(scale=2):
 				with gr.Group():
 					status = gr.Markdown(value = "### Admin Access **(Inactive)**:", elem_classes = "headline")
 					with gr.Row():
-						with gr.Column():
+						with gr.Column(scale = 1):
 							pw_text = gr.Textbox(
-								label="Admin password",
-								placeholder="Enter the password...",
-								type="password",
-								autofocus=True,
-								info="Entering the correct password will enable all blocked components."
+								label = "Admin password",
+								placeholder = "Enter the password...",
+								type = "password",
+								autofocus = True,
+								info = "Entering the correct password will enable all blocked components.",
 							)
-						with gr.Column(elem_classes="adminrow"):
-							apply_btn = gr.Button(
-								value = "Apply",
-								elem_classes="adminbutton"
+						#with gr.Column(scale = 0, min_width = 120, elem_classes="adminrow"):
+							check_btn = gr.Button(
+								value = "Check Password",
+								#elem_classes = "adminbutton"
 							)
+						with gr.Column(scale = 0, min_width = 150, elem_classes = "empty"):
+							def_lang_drop = gr.Dropdown(
+								choices = list(languages.keys()),
+								label = "Default Language",
+								value = language,
+								interactive = False,
+								info = "Default selected language."
+							)
+
+						with gr.Column(scale = 1):
+							def_file_struct = gr.Dropdown(
+								choices = struct_list,
+								label = "Default filename structure",
+								interactive = False,
+								multiselect = True,
+								filterable = True,
+								max_choices = 3,
+								info = "Select up to 3 elements for downloaded files.",
+								value = def_struct
+							)
+
+							struct_button = gr.Button(
+								interactive = False,
+								value = "Confirm",
+							)
+
 					with gr.Row():
-						def_lang_drop = gr.Dropdown(
-							interactive = False
-						)
-						def_speed_slide = gr.Slider(
-							interactive = False
-						)
+						with gr.Column(scale = 1):
+							def_speed_slide = gr.Slider(
+								label = "Default Speed",
+								minimum = 0.1,
+								maximum = 1.99,
+								value = speed,
+								step = 0.01,
+								interactive = False
+							)
+
+					# https://www.gradio.app/docs/interface#interface-launch-arguments
 					with gr.Row():
 						share_check = gr.Checkbox(
-							label="Create public link?",
-							info="Enable to activate app sharing at launch (Requires restart)",
+							label = "Create public link?",
+							info = "Enable to activate app sharing at launch (Requires restart)",
 							interactive = False,
 							value = share_val
 						)
 						browser_check = gr.Checkbox(
-							label="Open Browser?",
-							info="Enable to automatically open the browser at start. (Requires restart)",
+							label = "Open Browser?",
+							info = "Enable to automatically open the browser at start. (Requires restart)",
 							interactive = False,
 							value = browser_val
 						)
 
+					with gr.Row():
+						model_name = gr.Textbox(
+							label = "Model name",
+							interactive = False,
+							value = params["model_name"]
+						)
+
 	# Enable locked buttons if password is correct
-	apply_btn.click(
+	check_btn.click(
 		fn=comp_pw,
-		inputs=[pw_text, admin_state, def_lang_drop, def_speed_slide, share_check, browser_check, default_speaker_button, rename_button, rename_box, delete_speaker_button],
-		outputs=[pw_text, status, admin_state, def_lang_drop, def_speed_slide, share_check, browser_check, default_speaker_button, rename_button, rename_box, delete_speaker_button],
+		inputs=[pw_text, admin_state, def_lang_drop, def_speed_slide, share_check, browser_check, default_speaker_button, rename_button, rename_box, delete_speaker_button, def_file_struct, struct_button],
+		outputs=[pw_text, status, admin_state, def_lang_drop, def_speed_slide, share_check, browser_check, default_speaker_button, rename_button, rename_box, delete_speaker_button, def_file_struct, struct_button],
 		show_progress="hidden"
+	)
+
+	struct_button.click(
+		fn=set_default_structure,
+		inputs=[def_file_struct],
+		outputs=[def_file_struct, filename_struct]
+	)
+
+	# Handle default language checkbox
+	def_lang_drop.change(
+		fn=set_default_lang,
+		inputs=[def_lang_drop],
+		outputs=[def_lang_drop, language_dropdown]
+	)
+
+	# Handle default speed Slider
+	def_speed_slide.release(
+		fn=set_default_speed,
+		inputs=[def_speed_slide],
+		outputs=[def_speed_slide, speed_slider]
 	)
 
 	# Handle share checkbox selection ADMIN ACCESS
@@ -980,8 +1292,7 @@ if __name__ == "__main__":
 		allowed_paths=[out_path, tar_path, temp_path], #["/home/mk99/xtts2-ui/outputs/","/home/mk99/xtts2-ui/temp/"],
 		inbrowser=browser_val,
 		favicon_path=favicon, #"mk99.ico",
-		share=share_val,
-
+		share=share_val
 	)
 
 

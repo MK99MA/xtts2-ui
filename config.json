@@ -1,8 +1,8 @@
 {
   "default_speaker_name": "Test",
-  "def_struct": "spk + string_ul",
+  "def_structure": ["Text","Speaker"],
   "language": "English",
-  "speed": "0.8",
+  "speed": "1.0",
   "launch": {
     "browser": false,
     "share": false
