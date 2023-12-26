@@ -12,6 +12,7 @@ import soundfile as sf
 import os
 import requests
 import hashlib
+from datetime import datetime
 #import tqdm
 #import time
 
@@ -23,7 +24,7 @@ css = """
 	height: 27.5px !important;
 }
 .wrap-inner {
-	gap: 3px !important;
+	gap: 0px !important;
 }
 .remove-all {
 	margin-left: unset !important;
@@ -81,11 +82,7 @@ params = {
 	"model_name": "tts_models/multilingual/multi-dataset/xtts_v2",
 }
 
-#Custom string
-#filename Setting
-#filename duplicate name handling
 # DOWNLOAD in VOICE GEN!!
-
 
 # SUPPORTED_FORMATS = ['wav', 'mp3', 'flac', 'ogg']
 SAMPLE_RATE = 16000
@@ -93,7 +90,7 @@ device = None
 
 # Set the default speaker name
 default_speaker_name = "Rogger"
-def_struct = ["Speaker", "Text"]
+def_struct = ["Speaker", "Input"]
 fl_name = ''#'outputs/' + def_struct + '.wav'
 output_file = Path(fl_name)
 my_waveform = {
@@ -105,21 +102,30 @@ my_waveform = {
 
 #print(gr.__version__)
 
-# Decide on Hardware to use
-if is_mac_os():
-	device = torch.device('cpu')
-else:
-	#device = torch.device('cuda:0')
-	#AMD GPU and too lazy to add a coded check...
-	device = torch.device('cpu')
+def set_hardware(cpu_val):
+	if cpu_val:
+		use_device = 'cpu'
+	else:
+		if torch.cuda.is_available():
+			use_device = 'cuda:0'
+		else:
+			use_device = 'cpu'
+
+	# Decide on Hardware to use
+	if is_mac_os():
+		device = torch.device('cpu')
+	else:
+		#device = torch.device('cuda:0')
+		#AMD GPU and too lazy to add a coded check...
+		device = torch.device(use_device) #'cpu')
+
+	# Load model
+	tts = TTS(model_name=params["model_name"]).to(device)
+	return tts
 
 ###############################################################################
 ############################### Generate Voice ################################
 ###############################################################################
-
-# Load model
-# Disabled for testing
-tts = TTS(model_name=params["model_name"]).to(device)
 
 # # Random sentence (assuming harvard_sentences.txt is in the correct path)
 # def random_sentence():
@@ -135,12 +141,78 @@ def block_cancel():
 	gr.Warning("Generation was aborted.")
 	return gr.update(interactive = False)
 
+def handle_custom_text(input):
+	input = html.unescape(input)
+	input = input.replace(" ", "_")
+	gr.Info("Custom string was set to " + input)
+	return gr.update(
+		value = input
+	)
+
+def filename_selection(structure, input):
+	for elem in structure:
+		if elem == "Custom":
+			enable_box = True
+		else:
+			enable_box = False
+
+	return(
+		gr.update(
+			interactive = enable_box
+		)
+	)
+
+def get_iso(lang):
+	try:
+		with open('languages.json', 'r') as langfile:
+			data = json.load(langfile)
+	except FileNotFoundError:
+		data = {}
+
+	iso = data.get(lang, None)
+
+	return iso
+
 # Voice generation function
-def gen_voice(string, spk, speed, english):
+def gen_voice(string, spk, speed, english, structure, custom):
 	string = html.unescape(string)
 	short_uuid = str(uuid.uuid4())[:8]
-	string_ul = string.replace(" ","_")
-	fl_name='outputs/' + string_ul + '.wav'#spk + "-" + short_uuid +'.wav'
+
+	iso_code = get_iso(english)
+	date = datetime.now().date()
+	date = date.strftime("%d%m%Y")
+
+	mapping = {
+		"Input": string,
+		"Speaker": spk,
+		"Speed": speed,
+		"Language": english,
+		"ISO Code": iso_code,
+		"Custom": custom,
+		"UUID": short_uuid,
+		"Date": date
+	}
+
+	if len(structure) == 0:
+		out_string = string
+	elif len(structure) == 1:
+		buf1 = mapping.get(structure[0], "")
+		buf2 = ""
+		buf3 = ""
+	elif len(structure) == 2:
+		buf1 = mapping.get(structure[0], "")
+		buf2 = mapping.get(structure[1], "")
+		buf3 = ""
+	elif len(structure) == 3:
+		buf1 = mapping.get(structure[0], "")
+		buf2 = mapping.get(structure[1], "")
+		buf3 = mapping.get(structure[2], "")
+
+	out_string = "_".join(filter(None, [buf1, buf2, buf3]))
+
+	out_string = out_string.replace(" ", "_")
+	fl_name = 'outputs/' + out_string + '.wav'#spk + "-" + short_uuid +'.wav'
+	fl_name, name = modify_filename(fl_name)
 	output_file = Path(fl_name)
 	this_dir = str(Path(__file__).parent.resolve())
 	tts.tts_to_file(
@@ -150,7 +222,6 @@ def gen_voice(string, spk, speed, english):
 		speaker_wav=[f"{this_dir}/targets/" +spk + ".wav"],
 		language=languages[english]
 	)
-	# CHECK IF EXISTS CREATE WITH (n)
 	return(
 		output_file,
 		gr.update(interactive = False)
@@ -187,7 +258,8 @@ def createConfig():
 			"launch":{
 				"browser": False,
 				"share": False,
-				"favicon": "mk99.ico"
+				"favicon": "mk99.ico",
+				"cpu": cpu_val
 			}
 		}
 
@@ -204,6 +276,7 @@ def loadConfig():
 	browser_val = get_config_val("launch", "browser")
 	share_val = get_config_val("launch", "share")
 	favicon = get_config_val("launch", "favicon")
+	cpu_val = get_config_val("launch", "cpu")
 	default_speaker_name = get_config_val("default_speaker_name")
 	language = get_config_val("language")
 	def_speed = get_config_val("speed")
@@ -216,6 +289,7 @@ def loadConfig():
 		browser_val,
 		share_val,
 		favicon,
+		cpu_val,
 		default_speaker_name,
 		def_speed,
 		def_struct,
@@ -290,6 +364,22 @@ def browser_handler(checkbox, admin_state):
 
 	return gr.update()
 
+# CPU checkbox
+def cpu_handler(checkbox, admin_state):
+	if checkbox:
+		update_config("launch", True, "cpu")
+		gr.Info("Generation will use the CPU after the next start!")
+	else:
+		if torch.cuda.is_available():
+			update_config("launch", False, "cpu")
+			gr.Info("Generation will use the GPU after the next start!")
+		else:
+			update_config("launch", True, "cpu")
+			gr.Warning("Can't use GPU generation on this system!")
+
+			return gr.update(value = True)
+
+	return gr.update()
 
 # handle password Box
 def comp_pw(text, admin_state, *components):
@@ -587,6 +677,12 @@ def del_speaker(speaker_dropdown):
 	else:
 		print("The file does not exist: " + del_path)
 
+	default_speaker_name = get_config_val("default_speaker_name")
+	if default_speaker_name == speaker_del:
+		speakerlist = update_speakers()
+		default_speaker_name = speakerlist[0]
+		update_config("default_speaker_name", default_speaker_name)
+
 	#Refresh Box and set default value
 	return(
 		gr.update(choices=update_speakers(),
@@ -645,7 +741,8 @@ def modify_filename(save_path):
 		save_path = f"{folder}/{name}_{count}{ext}"
 		filename = f"{name}_{count}"
 
-	return save_path, filename
+		return save_path, filename
+	return save_path, ""
 
 # Handle audio
 def handle_recorded_audio(audio_data, speaker_dropdown, filename_input): # = "user_entered"):
@@ -674,21 +771,34 @@ def handle_recorded_audio(audio_data, speaker_dropdown, filename_input): # = "us
 
 	# Create a new Dropdown with the updated speakers list, including the recorded audio
 	updated_dropdown = update_dropdown(selected_speaker=filename)
-	return updated_dropdown
-
-
+	#return	updated_dropdown
+	return(
+		gr.update(
+			choices = update_speakers()
+			),
+		gr.update(
+			choices = update_speakers()
+		)
+	)
 
 ###############################################################################
 #################################### MAIN #####################################
 ###############################################################################
 createConfig()
-out_path, tar_path, temp_path, browser_val, share_val, favicon, default_speaker_name, speed, def_struct, language = loadConfig()
+out_path, tar_path, temp_path, browser_val, share_val, favicon, cpu_val, default_speaker_name, speed, def_struct, language = loadConfig()
+
+if "Custom" in def_struct:
+	custom_active = True
+else:
+	custom_active = False
+
+tts = set_hardware(cpu_val)
 
 # Load the language data
 with open(Path('languages.json'), encoding='utf8') as f:
 	languages = json.load(f)
 
-struct_list = ["Speaker", "UUID", "Language", "Speed", "Text", "Custom"] # Text = string_ul
+struct_list = ["Custom", "Date", "Input", "ISO Code", "Language", "Speaker", "Speed", "UUID"] # Text = string_ul
 
 ################################################################################
 # Gradio Blocks interface
@@ -707,6 +817,7 @@ with gr.Blocks(mode = "MK99", title = "MK99 - TTS Gen", css = css) as app:
 							text_input = gr.Textbox(
 								lines=2,
 								label="Speechify this Text",
+								autofocus = True,
 								value="Even in the darkest nights, a single spark of hope can ignite the fire of determination within us, guiding us towards a future we dare to dream."
 							)
 
@@ -786,16 +897,16 @@ with gr.Blocks(mode = "MK99", title = "MK99 - TTS Gen", css = css) as app:
 								interactive = True
 							)
 						with gr.Column(scale = 0, min_width = 275):
-	#########################TODO
 							custom_input = gr.Textbox(
-								label = "Custom String",
-								info = "Requires 'Custom' in structure!",
-								placeholder = "Enter a custom value"
+								label = "Enter 'custom' string",
+								info = "Enter to confirm.",
+								placeholder = "Enter a custom value",
+								interactive = custom_active
 							)
 
 		submit_click = submit_button.click(
 			fn=gen_voice,
-			inputs=[text_input, gen_speaker_dropdown, speed_slider, language_dropdown],
+			inputs=[text_input, gen_speaker_dropdown, speed_slider, language_dropdown, filename_struct, custom_input],
 			outputs=[audio_output, cancel_gen_button]
 		)
 
@@ -803,6 +914,19 @@ with gr.Blocks(mode = "MK99", title = "MK99 - TTS Gen", css = css) as app:
 			fn=handle_cancel,
 			inputs=[],
 			outputs=[cancel_gen_button]
+		)
+
+		custom_input.submit(
+			fn=handle_custom_text,
+			inputs=[custom_input],
+			outputs=[custom_input],
+			show_progress = "hidden"
+		)
+
+		filename_struct.select(
+			fn=filename_selection,
+			inputs=[filename_struct, custom_input],
+			outputs=[custom_input]
 		)
 
 		cancel_gen_button.click(
@@ -878,7 +1002,6 @@ with gr.Blocks(mode = "MK99", title = "MK99 - TTS Gen", css = css) as app:
 								value = "❌",
 								visible = False
 							)
-					#ADD CONFIRMATION
 
 		with gr.Row():
 			record_button = gr.Audio(
@@ -887,7 +1010,6 @@ with gr.Blocks(mode = "MK99", title = "MK99 - TTS Gen", css = css) as app:
 
 		with gr.Row():
 			with gr.Accordion(label="🔽 Download Voice 🔽", open=False):
-				# CHANGE TO DROPDOWN!!!
 				target_drop = gr.Dropdown(
 					choices = list_dir_tar(),
 					label="Preview / Download Voice",
@@ -908,12 +1030,11 @@ with gr.Blocks(mode = "MK99", title = "MK99 - TTS Gen", css = css) as app:
 			outputs=[speaker_dropdown, gen_speaker_dropdown]
 		)
 
-		# Handle delete voice button ADMIN ACCESS
-#		delete_speaker_button.click(
-#			fn=del_speaker, #function,
-#			inputs=[speaker_dropdown], #vars,
-#			outputs=speaker_dropdown
-#		)
+		speaker_dropdown.change(
+			fn=lambda :[gr.update(visible=True), gr.update(visible=False), gr.update(visible=False)],
+			inputs=None,
+			outputs=[delete_speaker_button, tar_confirm_button, tar_cancel_button]
+		)
 
 		delete_speaker_button.click(
 			fn=lambda :[gr.update(visible=False), gr.update(visible=True), gr.update(visible=True)],
@@ -935,13 +1056,6 @@ with gr.Blocks(mode = "MK99", title = "MK99 - TTS Gen", css = css) as app:
 			outputs=[delete_speaker_button, tar_confirm_button, tar_cancel_button]
 		)
 
-		# Handle refresh button (inactive)
-#		refresh_button.click(
-#			fn=update_dropdown,
-#			inputs=[],
-#			outputs=speaker_dropdown
-#		)
-
 		# Handle rename button ADMIN ACCESS TODO
 		rename_button.click(
 			fn=rename_target,
@@ -953,22 +1067,23 @@ with gr.Blocks(mode = "MK99", title = "MK99 - TTS Gen", css = css) as app:
 		save_button.click(
 			fn=handle_recorded_audio,
 			inputs=[record_button, speaker_dropdown, filename_input],
-			outputs=speaker_dropdown
+			outputs=[speaker_dropdown,gen_speaker_dropdown]
 		)
+		# UPDATE VOICEGEN LIST!!
 
 		# Handle stop recording button
 		record_button.stop_recording(
 			fn=handle_recorded_audio,
 			inputs=[record_button, speaker_dropdown, filename_input],
-			outputs=speaker_dropdown
+			outputs=[speaker_dropdown,gen_speaker_dropdown]
 		)
 
-		# Handle upload record button
-		record_button.upload(
-			fn=handle_recorded_audio,
-			inputs=[record_button, speaker_dropdown, filename_input],
-			outputs=speaker_dropdown
-		)
+#		# Handle upload record button
+#		record_button.upload(
+#			fn=handle_recorded_audio,
+#			inputs=[record_button, speaker_dropdown, filename_input],
+#			outputs=[speaker_dropdown, gen_speaker_dropdown]
+#		)
 
 		# Handle Preview dropdown list
 		target_drop.change(
@@ -1222,19 +1337,27 @@ with gr.Blocks(mode = "MK99", title = "MK99 - TTS Gen", css = css) as app:
 							value = browser_val
 						)
 
-					with gr.Row():
-						model_name = gr.Textbox(
-							label = "Model name",
-							interactive = False,
-							value = params["model_name"]
-						)
+					with gr.Row(elem_classes = "empty"):
+						with gr.Column(scale=2):
+							model_name = gr.Textbox(
+								label = "Model name",
+								interactive = False,
+								value = params["model_name"]
+							)
+						with gr.Column(scale=1, elem_classes = "empty"):
+							cpu_check = gr.Checkbox(
+								label = "Use CPU?",
+								info = "Enable to force using your CPU.",
+								interactive = False,
+								value = cpu_val
+							)
 
 	# Enable locked buttons if password is correct
 	check_btn.click(
 		fn=comp_pw,
-		inputs=[pw_text, admin_state, def_lang_drop, def_speed_slide, share_check, browser_check, default_speaker_button, rename_button, rename_box, delete_speaker_button, def_file_struct, struct_button],
-		outputs=[pw_text, status, admin_state, def_lang_drop, def_speed_slide, share_check, browser_check, default_speaker_button, rename_button, rename_box, delete_speaker_button, def_file_struct, struct_button],
-		show_progress="hidden"
+		inputs=[pw_text, admin_state, def_lang_drop, def_speed_slide, share_check, browser_check, cpu_check, default_speaker_button, rename_button, rename_box, delete_speaker_button, def_file_struct, struct_button],
+		outputs=[pw_text, status, admin_state, def_lang_drop, def_speed_slide, share_check, browser_check, cpu_check, default_speaker_button, rename_button, rename_box, delete_speaker_button, def_file_struct, struct_button],
+		#show_progress="hidden"
 	)
 
 	struct_button.click(
@@ -1269,6 +1392,13 @@ with gr.Blocks(mode = "MK99", title = "MK99 - TTS Gen", css = css) as app:
 		fn=browser_handler,
 		inputs=[browser_check, admin_state],
 		outputs=[browser_check]
+	)
+
+	# Handle CPU checkbox Selection
+	cpu_check.select(
+		fn=cpu_handler,
+		inputs=[cpu_check, admin_state],
+		outputs=[cpu_check]
 	)
 
 	# Handle json refresh button

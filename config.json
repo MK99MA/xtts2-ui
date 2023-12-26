@@ -1,10 +1,16 @@
 {
-  "default_speaker_name": "Test",
-  "def_structure": ["Text","Speaker"],
+  "default_speaker_name": "Rogger",
+  "def_structure": [
+    "ISO Code",
+    "Date",
+    "Input"
+  ],
   "language": "English",
   "speed": "1.0",
   "launch": {
     "browser": false,
-    "share": false
+    "share": false,
+    "favicon": "mk99.ico",
+    "cpu": true
   }
 }
