@@ -181,7 +181,7 @@ def createConfig():
 		# Default config values for creation
 		default_vals = {
 			"default_speaker_name": default_speaker_name,
-			"def_struct": def_struct,
+			"def_structure": def_struct,
 			"language": "English",
 			"speed": "0.8",
 			"launch":{
