@@ -7,8 +7,9 @@ Works in [16 languages](#language-support) and has in-built voice recording/uplo
 ## Model
 The model used is `tts_models/multilingual/multi-dataset/xtts_v2`. For more details, refer to [Hugging Face - XTTS-v2](https://huggingface.co/coqui/XTTS-v2) and its specific version [XTTS-v2 Version 2.0.2](https://huggingface.co/coqui/XTTS-v2/tree/v2.0.2).
 
-<h1 align="center">    
-  <img src="demo_info/ui.png" width="100%"></a>  
+<h1 align="center">
+  <img src="demo_info/ui_generation.png" width="95%"></img>
+  <img src="demo_info/ui_speaker.png" width="23%"></img> <img src="demo_info/ui_archive.png" width="23%"></img> <img src="demo_info/ui_settings.png" width="23%"></img> <img src="demo_info/ui_speaker_admin.png" width="23%"></img>
 </h1>
 
 ## Table of Contents
