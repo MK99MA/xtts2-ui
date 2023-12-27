@@ -213,6 +213,7 @@ def gen_voice(string, spk, speed, english, structure, custom):
 	out_string = out_string.replace(" ", "_")
 	fl_name = 'outputs/' + out_string + '.wav'#spk + "-" + short_uuid +'.wav'
 	fl_name, name = modify_filename(fl_name)
+	url = "file=" + fl_name
 	output_file = Path(fl_name)
 	this_dir = str(Path(__file__).parent.resolve())
 	tts.tts_to_file(
@@ -224,6 +225,7 @@ def gen_voice(string, spk, speed, english, structure, custom):
 	)
 	return(
 		output_file,
+		#gr.update(link = url, interactive = True),
 		gr.update(interactive = False)
 	)
 
@@ -874,14 +876,16 @@ with gr.Blocks(mode = "MK99", title = "MK99 - TTS Gen", css = css) as app:
 					with gr.Row():
 						audio_output = gr.Audio()
 
-					with gr.Row(elem_classes = "row_75"):
-						with gr.Column(scale = 1, min_width = 50):
-							download_button = gr.Button(
-								value = "Download",
-								icon = "dl.ico",
-								link = output_file,
-								elem_classes = "button_75"
-							)
+					#with gr.Row(elem_classes = "row_75"):
+					#	with gr.Column(scale = 1, min_width = 50):
+					#		download_button = gr.Button(
+					#			value = "Download",
+					#			icon = "dl.ico",
+					#			link = output_file,
+					#			elem_classes = "button_75",
+					#			interactive = False,
+					#			visible = False
+					#		)
 
 					with gr.Row():
 						# Column for filename structure
@@ -907,6 +911,7 @@ with gr.Blocks(mode = "MK99", title = "MK99 - TTS Gen", css = css) as app:
 		submit_click = submit_button.click(
 			fn=gen_voice,
 			inputs=[text_input, gen_speaker_dropdown, speed_slider, language_dropdown, filename_struct, custom_input],
+#			outputs=[audio_output, download_button, cancel_gen_button]
 			outputs=[audio_output, cancel_gen_button]
 		)
 
