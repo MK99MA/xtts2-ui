@@ -13,6 +13,7 @@ import os
 import requests
 import hashlib
 from datetime import datetime
+import csv
 #import tqdm
 #import time
 
@@ -81,8 +82,13 @@ params = {
 	"language": "English",
 	"model_name": "tts_models/multilingual/multi-dataset/xtts_v2",
 }
-
-# DOWNLOAD in VOICE GEN!!
+#"model_name":tts_models/deu/fairseq/vits",
+#tts = TTS("tts_models/de/thorsten/tacotron2-DDC")
+#tts.tts_with_vc_to_file(
+#    "Wie sage ich auf Italienisch, dass ich dich liebe?",
+#    speaker_wav="target/speaker.wav",
+#    file_path="output.wav"
+#)
 
 # SUPPORTED_FORMATS = ['wav', 'mp3', 'flac', 'ogg']
 SAMPLE_RATE = 16000
@@ -173,15 +179,7 @@ def get_iso(lang):
 
 	return iso
 
-# Voice generation function
-def gen_voice(string, spk, speed, english, structure, custom):
-	string = html.unescape(string)
-	short_uuid = str(uuid.uuid4())[:8]
-
-	iso_code = get_iso(english)
-	date = datetime.now().date()
-	date = date.strftime("%d%m%Y")
-
+def get_outstring(string, spk, speed, english, iso_code, custom, short_uuid, date, structure):
 	mapping = {
 		"Input": string,
 		"Speaker": spk,
@@ -210,24 +208,77 @@ def gen_voice(string, spk, speed, english, structure, custom):
 
 	out_string = "_".join(filter(None, [buf1, buf2, buf3]))
 
-	out_string = out_string.replace(" ", "_")
-	fl_name = 'outputs/' + out_string + '.wav'#spk + "-" + short_uuid +'.wav'
-	fl_name, name = modify_filename(fl_name)
-	url = "file=" + fl_name
-	output_file = Path(fl_name)
-	this_dir = str(Path(__file__).parent.resolve())
-	tts.tts_to_file(
-		text=string,
-		speed=speed,
-		file_path=output_file,
-		speaker_wav=[f"{this_dir}/targets/" +spk + ".wav"],
-		language=languages[english]
-	)
-	return(
-		output_file,
-		#gr.update(link = url, interactive = True),
-		gr.update(interactive = False)
-	)
+	out_string = out_string.replace(" ", "_").replace("?", "_")
+
+	return out_string
+
+
+# Bulk Generation
+def read_csv(file):
+	string = ""
+	with open(file, newline='') as csv_file:
+		csv_reader = csv.reader(csv_file, delimiter = ";")
+		for row in csv_reader:
+			string = "|".join(row)
+
+	string.replace("?","_")
+	if string.rfind("|") == len(string)-1:
+		string = string[: -1]
+
+	print(string)
+	return string
+
+# Voice generation function
+def gen_voice(string, spk, speed, english, structure, custom):
+	short_uuid = str(uuid.uuid4())[:8]
+	iso_code = get_iso(english)
+	date = datetime.now().date()
+	date = date.strftime("%d%m%Y")
+
+	if string.find('|') != -1:
+		list = string.split("|")
+		pathlist = []
+		for texts in list:
+			texts = html.unescape(texts)
+			out_string = get_outstring(texts, spk, speed, english, iso_code, custom, short_uuid, date, structure)
+			fl_name = 'outputs/' + out_string + '.wav'#spk + "-" + short_uuid +'.wav'
+			fl_name, name = modify_filename(fl_name)
+			output_file = Path(fl_name)
+			this_dir = str(Path(__file__).parent.resolve())
+			tts.tts_to_file(
+				text=texts,
+				speed=speed,
+				file_path=output_file,
+				speaker_wav=[f"{this_dir}/targets/" +spk + ".wav"],
+				language=languages[english]
+			)
+			gr.Info(f"\"{texts}\" has been generated.")
+			pathlist.append(output_file)
+
+		download_link = zipped_download(pathlist)
+
+		gr.Info(f"{len(list)} files have been processed.")
+		return(output_file,
+			gr.update(value = "Download", link = download_link, visible = True)
+		)
+	else:
+		string = html.unescape(string)
+		out_string = get_outstring(string, spk, speed, english, iso_code, custom, short_uuid, date, structure)
+		fl_name = 'outputs/' + out_string + '.wav'#spk + "-" + short_uuid +'.wav'
+		fl_name, name = modify_filename(fl_name)
+		output_file = Path(fl_name)
+		this_dir = str(Path(__file__).parent.resolve())
+		tts.tts_to_file(
+			text=string,
+			speed=speed,
+			file_path=output_file,
+			speaker_wav=[f"{this_dir}/targets/" +spk + ".wav"],
+			language=languages[english]
+		)
+		return(output_file,
+			#gr.update(interactive = False)
+			gr.update(link = "", visible = False)
+		)
 
 # restore defaults
 def reload_defaults():
@@ -455,6 +506,7 @@ def set_default_speed(speed_slide_val):
 def zipped_download(selected_files):
 	with ZipFile("temp/generated_audio.zip","w") as zipObj:
 		for file_path in selected_files:
+			#print(file_path)
 			if os.path.exists(file_path):
 				zipObj.write(file_path, arcname=os.path.basename(file_path))
 			else:
@@ -817,10 +869,11 @@ with gr.Blocks(mode = "MK99", title = "MK99 - TTS Gen", css = css) as app:
 					with gr.Row():
 						with gr.Column(scale=2):
 							text_input = gr.Textbox(
-								lines=2,
-								label="Speechify this Text",
+								lines= 2,
+								label= "Speechify this Text",
 								autofocus = True,
-								value="Even in the darkest nights, a single spark of hope can ignite the fire of determination within us, guiding us towards a future we dare to dream."
+								elem_classes="emtpy-tab",
+								value= "Even in the darkest nights, a single spark of hope can ignite the fire of determination within us, guiding us towards a future we dare to dream."
 							)
 
 					with gr.Row():
@@ -861,10 +914,14 @@ with gr.Blocks(mode = "MK99", title = "MK99 - TTS Gen", css = css) as app:
 							elem_classes = "vert_button"
 						)
 						# TODO
-						cancel_gen_button = gr.Button(
-							value = "Abort Process",
+						#cancel_gen_button = gr.Button(
+						csv_input = gr.UploadButton(
+							#value = "Abort Process",
+							label = "Upload CSV (;)",
 							elem_classes = "vert_button",
-							interactive = False
+							file_count = "single",
+							file_types = [".csv"]
+							#interactive = False
 						)
 						reload_def = gr.Button(
 							value = "Restore Defaults",
@@ -907,19 +964,38 @@ with gr.Blocks(mode = "MK99", title = "MK99 - TTS Gen", css = css) as app:
 								placeholder = "Enter a custom value",
 								interactive = custom_active
 							)
+					with gr.Row():
+						with gr.Column():
+							bulk_download = gr.Button(
+								value = "Download",
+								visible = False
+							)
+
 
 		submit_click = submit_button.click(
 			fn=gen_voice,
 			inputs=[text_input, gen_speaker_dropdown, speed_slider, language_dropdown, filename_struct, custom_input],
 #			outputs=[audio_output, download_button, cancel_gen_button]
-			outputs=[audio_output, cancel_gen_button]
+			outputs=[audio_output, bulk_download] #, cancel_gen_button]
 		)
 
 		submit_button.click(
-			fn=handle_cancel,
-			inputs=[],
-			outputs=[cancel_gen_button]
+			fn=lambda :[gr.update(value = "Download", visible=False)],
+			inputs=None,
+			outputs=[bulk_download]
 		)
+
+		csv_input.upload(
+			fn=read_csv,
+			inputs=[csv_input],
+			outputs=[text_input]
+		)
+
+		#submit_button.click(
+		#	fn=handle_cancel,
+		#	inputs=[],
+		#	outputs=[cancel_gen_button]
+		#)
 
 		custom_input.submit(
 			fn=handle_custom_text,
@@ -934,12 +1010,12 @@ with gr.Blocks(mode = "MK99", title = "MK99 - TTS Gen", css = css) as app:
 			outputs=[custom_input]
 		)
 
-		cancel_gen_button.click(
-			fn=block_cancel,
-			inputs=[],
-			outputs=[cancel_gen_button],
-			cancels=[submit_click]
-		)
+		#cancel_gen_button.click(
+		#	fn=block_cancel,
+		#	inputs=[],
+		#	outputs=[cancel_gen_button],
+		#	cancels=[submit_click]
+		#)
 
 		reload_def.click(
 			fn=reload_defaults,
